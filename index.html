@@ -9,23 +9,39 @@
         .card { background-color: #1e1e1e; border: 1px solid #333; border-radius: 10px; padding: 20px; max-width: 400px; margin: 20px auto; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         h2 { color: #f39c12; margin-top: 0; }
         .dist { font-size: 3rem; font-weight: bold; margin: 10px 0; color: #00e676; }
+        
+        /* THE NEW DISTANCE GRAPH */
+        .graph-container { width: 100%; background-color: #222; border: 1px solid #444; border-radius: 5px; height: 30px; margin: 20px 0; overflow: hidden; position: relative; }
+        .graph-bar { height: 100%; width: 0%; background-color: #00e676; transition: width 0.2s ease, background-color 0.2s ease; }
+        .graph-labels { display: flex; justify-content: space-between; font-size: 0.75rem; color: #888; margin-top: -15px; margin-bottom: 20px;}
+        
         button { background-color: #f39c12; color: #000; border: none; padding: 15px 20px; font-size: 1.1rem; font-weight: bold; border-radius: 5px; cursor: pointer; width: 100%; margin-bottom: 10px; transition: 0.2s; }
         button:hover { background-color: #e67e22; }
         button.setup { background-color: #3498db; }
-        input { padding: 12px; width: 90%; font-size: 1rem; border-radius: 5px; border: none; margin-bottom: 15px; box-sizing: border-box; text-align: center; }
+        button.setup:hover { background-color: #2980b9; }
+        input { padding: 12px; width: 100%; font-size: 1rem; border-radius: 5px; border: none; margin-bottom: 15px; box-sizing: border-box; text-align: center; }
         .footer { font-size: 0.8rem; color: #666; margin-top: 30px; }
     </style>
 </head>
 <body>
 
-    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Bluetooth_Logo.svg/200px-Bluetooth_Logo.svg.png" width="50" style="opacity: 0.7;">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Bluetooth_Logo.svg/200px-Bluetooth_Logo.svg.png" width="50" style="opacity: 0.7;" alt="Bluetooth">
     <h1>Focus HLS Manager</h1>
 
     <div class="card">
         <h2>Live Tracking</h2>
-        <p id="nodeNameDisplay">Status: Disconnected</p>
+        <p id="nodeNameDisplay" style="font-weight: bold; color: #aaa;">Status: Disconnected</p>
+        
         <div class="dist" id="distanceDisplay">-- m</div>
-        <p style="color:#888;">Live Distance Estimate</p>
+        
+        <div class="graph-container">
+            <div class="graph-bar" id="liveGraphBar"></div>
+        </div>
+        <div class="graph-labels">
+            <span>0m (Close)</span>
+            <span>10m+ (Far)</span>
+        </div>
+
         <button onclick="startTracking()">SYNC WITH NODE</button>
     </div>
 
@@ -36,23 +52,54 @@
         <button class="setup" onclick="setupNewNode()">ASSIGN NAME TO NODE</button>
     </div>
 
-    <div class="footer">Secure Bluetooth API &bull; Requires Google Chrome</div>
+    <div class="footer">Secure Web Bluetooth API &bull; Requires Google Chrome</div>
 
     <script>
         const TACTICAL_SERVICE_UUID = '0000180f-0000-1000-8000-00805f9b34fb';
         const SETUP_CHAR_UUID = '00009999-0000-1000-8000-00805f9b34fb';
 
-        // 1. Math to convert raw volume (RSSI) into Physical Distance (Meters)
+        // Math to convert raw volume (RSSI) into Physical Distance (Meters)
         function calculateDistance(rssi) {
             if (rssi === 0) return 0;
             const txPower = -65; // Calibrated for ESP32 +9dBm at 1 meter
             const environmentalFactor = 2.5; 
             let ratio = (txPower - rssi) / (10 * environmentalFactor);
             let distanceInMeters = Math.pow(10, ratio);
-            return distanceInMeters.toFixed(2); 
+            return distanceInMeters; 
         }
 
-        // 2. LIVE TRACKING LOGIC (Passive Listening)
+        // Updates the visual bar graph based on distance
+        function updateVisualGraph(distanceMeters) {
+            const bar = document.getElementById("liveGraphBar");
+            const text = document.getElementById("distanceDisplay");
+            
+            text.innerText = distanceMeters.toFixed(2) + " m";
+
+            // Assuming a max tracking range of 10 meters for the visual graph
+            let percentage = (distanceMeters / 10) * 100;
+            
+            // Keep it between 0% and 100%
+            if (percentage > 100) percentage = 100;
+            if (percentage < 0) percentage = 0;
+
+            // Invert the bar so it is full when CLOSE, and empty when FAR
+            let barWidth = 100 - percentage;
+            bar.style.width = barWidth + "%";
+
+            // Color coding based on proximity
+            if (distanceMeters < 2.0) {
+                bar.style.backgroundColor = "#00e676"; // Green (Very Close)
+                text.style.color = "#00e676";
+            } else if (distanceMeters < 6.0) {
+                bar.style.backgroundColor = "#f39c12"; // Orange (Medium)
+                text.style.color = "#f39c12";
+            } else {
+                bar.style.backgroundColor = "#e74c3c"; // Red (Far)
+                text.style.color = "#e74c3c";
+            }
+        }
+
+        // LIVE TRACKING LOGIC
         async function startTracking() {
             try {
                 const device = await navigator.bluetooth.requestDevice({
@@ -64,6 +111,7 @@
                 await device.watchAdvertisements();
                 let nodeName = device.name || "Focus Node [Unknown]";
                 document.getElementById("nodeNameDisplay").innerText = "Tracking: " + nodeName;
+                document.getElementById("nodeNameDisplay").style.color = "#fff";
 
                 // Listen for physical radio pings
                 device.addEventListener('advertisementreceived', (event) => {
@@ -73,46 +121,42 @@
                         document.getElementById("nodeNameDisplay").innerText = "Tracking: " + nodeName;
                     }
 
-                    // Convert physics to distance
-                    let distance = calculateDistance(event.rssi);
-                    document.getElementById("distanceDisplay").innerText = distance + " m";
+                    // Calculate distance and update graph!
+                    let rawDistance = calculateDistance(event.rssi);
+                    updateVisualGraph(rawDistance);
                 });
 
             } catch (error) {
                 console.error(error);
-                alert("Tracking Error. Ensure Location & Bluetooth are enabled in Android settings.");
+                alert("Tracking Error. Ensure Bluetooth is enabled on your PC/Phone and you accepted the prompt.");
             }
         }
 
-        // 3. OTA PROVISIONING LOGIC (Active Connection & Write)
+        // OTA PROVISIONING LOGIC
         async function setupNewNode() {
             const newName = document.getElementById("newNameInput").value;
             if(!newName) { alert("Please type a name first!"); return; }
 
             try {
-                // Find the device
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [{ services: [0x180F] }]
                 });
 
-                // Connect to the ESP32's Internal Server
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(TACTICAL_SERVICE_UUID);
                 const characteristic = await service.getCharacteristic(SETUP_CHAR_UUID);
 
-                // Encode the text and beam it to the board
                 const encoder = new TextEncoder();
                 await characteristic.writeValue(encoder.encode(newName));
 
                 alert(`Success! The Node has been permanently programmed as "${newName}". It will now reboot.`);
                 
-                // Disconnect so it can reboot cleanly
                 server.disconnect();
                 document.getElementById("newNameInput").value = "";
 
             } catch (error) {
                 console.error(error);
-                alert("Setup Failed. Ensure you are close to the node.");
+                alert("Setup Failed. Ensure you are close to the node and it is broadcasting.");
             }
         }
     </script>
