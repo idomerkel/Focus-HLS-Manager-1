@@ -4,232 +4,582 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Focus HLS - Command Dashboard</title>
+    
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
     <style>
         :root { --cyber-blue: #00b4d8; --dark-bg: #0b0f19; --panel-bg: #1a2235; --focus-orange: #f77f00; --alert-red: #d90429; --text-muted: #8892b0; }
         * { box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--dark-bg); color: #caf0f8; margin: 0; display: flex; height: 100vh; overflow: hidden; }
         
         /* SIDEBAR */
-        .sidebar { width: 300px; background: var(--panel-bg); border-right: 2px solid var(--cyber-blue); display: flex; flex-direction: column; }
-        .logo { padding: 20px; text-align: center; background: #000; border-bottom: 1px solid var(--cyber-blue); font-size: 24px; font-weight: bold; }
-        .logo span { color: var(--cyber-blue); }
-        .nav-btn { padding: 15px 20px; border-bottom: 1px solid #222; cursor: pointer; transition: 0.2s; font-weight: bold; }
-        .nav-btn:hover, .nav-btn.active { background: #111; color: var(--cyber-blue); border-left: 4px solid var(--cyber-blue); }
-        
-        /* MAIN CONTENT */
-        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
-        .view-panel { display: none; padding: 20px; height: 100%; overflow-y: auto; }
-        .view-panel.active { display: flex; flex-direction: column; gap: 20px;}
-        
-        /* DASHBOARD GRID */
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .card { background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid #1a2235; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .card h3 { margin-top: 0; color: var(--text-muted); border-bottom: 1px solid #333; padding-bottom: 10px; }
-        
-        /* CHARTS & TIMELINE */
-        .chart-container { height: 250px; width: 100%; background: #000; border-radius: 8px; border: 1px solid var(--cyber-blue); padding: 10px;}
-        
-        /* ALERTS */
-        .alert-banner { background: rgba(217, 4, 41, 0.2); border: 1px solid var(--alert-red); padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(217, 4, 41, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(217, 4, 41, 0); } }
+        .sidebar { width: 350px; background: var(--panel-bg); border-right: 2px solid var(--cyber-blue); display: flex; flex-direction: column; flex-shrink: 0; z-index: 10; }
+        .sidebar-logo-container { padding: 20px; text-align: center; background: #000; border-bottom: 2px solid var(--cyber-blue); }
+        .sidebar-logo-container h1 { color: #fff; margin: 0; font-size: 32px; letter-spacing: 2px; }
+        .sidebar-logo-container h1 span { color: var(--cyber-blue); }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 15px; }
 
-        /* FORMS */
-        input, select { width: 100%; padding: 10px; background: #000; border: 1px solid #444; color: white; border-radius: 4px; margin-bottom: 15px; }
-        button { background: var(--cyber-blue); color: #000; border: none; padding: 10px 20px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        .guard-group { margin-bottom: 12px; border: 1px solid #333; border-radius: 4px; overflow: hidden; }
+        .guard-header { background: rgba(0, 180, 216, 0.1); padding: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #222; font-weight: bold; }
+        .session-list { display: block; background: #000; } 
+        .session-item { padding: 15px 10px; border-bottom: 1px solid #222; font-size: 0.9em; display: flex; justify-content: space-between; align-items: center; cursor: pointer; color: #aaa; transition: 0.2s; }
+        .session-item:hover { color: var(--cyber-blue); background: #111; }
+        .session-item.active { border-left: 4px solid var(--cyber-blue); color: #fff; background: #111; }
+        .del-btn { color: var(--alert-red); font-weight: bold; border: none; background: none; cursor: pointer; padding: 5px; font-size: 1.2em; }
+
+        .main-content { flex: 1; padding: 15px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+        /* TELEMETRY CHART ROW */
+        .telemetry-row { height: 18vh; min-height: 120px; background: #000; border: 1px solid var(--cyber-blue); margin-bottom: 15px; position: relative; border-radius: 8px; overflow: hidden; }
+        
+        .dashboard-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 15px; flex: 1; min-height: 0; }
+        .card { background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid #1a2235; overflow-y: auto; display: flex; flex-direction: column; }
+        .card-title { margin-top: 0; font-size: 0.9em; color: var(--text-muted); margin-bottom: 15px; letter-spacing: 1px; border-bottom: 1px solid #333; padding-bottom: 5px;}
+        
+        /* GUARD PROFILE CARD */
+        .profile-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; }
+        .profile-name { margin: 0; color: var(--cyber-blue); font-size: 1.8em; }
+        .profile-status { font-size: 1.2em; font-weight: bold; padding: 5px 15px; border-radius: 4px; background: #333; color: #fff; }
+        .profile-status.alert { background: var(--alert-red); animation: pulse 1s infinite; }
+        .profile-details { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9em; }
+        .detail-item { background: #0b0f19; padding: 8px; border-radius: 6px; border: 1px solid #222; }
+        .detail-label { color: var(--text-muted); font-size: 0.8em; margin-bottom: 2px; }
+        .detail-val { color: #fff; font-weight: bold; }
+
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(217, 4, 41, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(217, 4, 41, 0); } 100% { box-shadow: 0 0 0 0 rgba(217, 4, 41, 0); } }
+
+        /* TIMELINE */
+        .timeline-container { flex: 1; overflow-y: auto; background: #0a0e14; padding: 15px; border-radius: 6px; border: 1px solid #1a2235; }
+        .time-entry { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; border-bottom: 1px solid #1a2235; padding-bottom: 10px; font-size: 0.9em; }
+        .status-tag { background: var(--cyber-blue); color: #000; padding: 3px 10px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
+
+        /* ALERT SETTINGS LIST */
+        .alert-settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.8em; color: #ccc; }
+        .alert-settings-grid label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+        .alert-settings-grid input { accent-color: var(--alert-red); }
+
+        /* BUTTONS */
+        .alert-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: auto; }
+        .cmd-btn { border: none; padding: 12px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.9em; }
+        .cmd-btn:hover { filter: brightness(1.2); }
+
+        /* SIMULATOR DRAWER */
+        .sim-drawer { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 95%; max-width: 600px; background: var(--panel-bg); border: 2px solid var(--focus-orange); border-bottom: none; border-radius: 15px 15px 0 0; z-index: 9999; transition: transform 0.3s ease-in-out; box-shadow: 0 -10px 30px rgba(0,0,0,0.8); }
+        .sim-drawer.collapsed { transform: translate(-50%, calc(100% - 45px)); }
+        .sim-header { background: var(--focus-orange); color: #fff; padding: 12px 20px; cursor: pointer; border-radius: 12px 12px 0 0; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 1.1em; }
+        .sim-body { padding: 20px; display: flex; flex-direction: column; gap: 12px; max-height: 75vh; overflow-y: auto; }
+        .sim-input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .sim-body input[type="text"] { padding: 12px; background: #0b0f19; color: #fff; border: 1px solid #444; border-radius: 6px; font-size: 0.9em; width: 100%; }
+        .sim-body input[type="text"]:focus { outline: none; border-color: var(--focus-orange); }
+        .sim-btn { padding: 15px; border: none; border-radius: 6px; color: white; background: var(--focus-orange); cursor: pointer; font-weight: bold; font-size: 1em; width: 100%; transition: 0.2s; }
+        .sim-btn:hover { background: #d66d00; }
+        .mock-toggle { display: flex; align-items: center; gap: 10px; color: #ccc; font-size: 0.9em; margin-top: 5px; background: #000; padding: 10px; border-radius: 6px; }
     </style>
 </head>
-<body>
+<body id="main-body">
 
     <div class="sidebar">
-        <div class="logo">FOCUS <span>HLS</span></div>
-        <div class="nav-btn active" onclick="switchView('dashboard')">Live Dashboard</div>
-        <div class="nav-btn" onclick="switchView('tasks')">Task & Calendar</div>
-        <div class="nav-btn" onclick="switchView('comms')">Communications</div>
-        <div class="nav-btn" onclick="switchView('setup')">Positioner Setup</div>
+        <div class="sidebar-logo-container">
+            <h1>FOCUS <span>HLS</span></h1>
+            <div style="color: #666; font-size: 11px; margin-top: 5px; font-weight: bold; letter-spacing: 1px;">COMMAND CENTER</div>
+        </div>
+        <div class="sidebar-content" id="roster">
+            <div class="guard-group">
+                 <div class="guard-header">
+                    <span>Active Patrols</span>
+                    <span id="active-count" style="background: var(--cyber-blue); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;">0</span>
+                </div>
+                <div class="session-list" id="session-list">
+                    <div style="padding: 20px; text-align: center; color: #555;">Waiting for active units...</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="main-content">
+        <div class="telemetry-row">
+            <canvas id="telChart"></canvas>
+             <div id="tel-overlay" style="position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.8); display: flex; align-items:center; justify-content:center; font-weight:bold; color:var(--cyber-blue); font-size: 1.2em; z-index:10; letter-spacing: 2px;">
+                AWAITING SESSION SELECTION
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div style="display:flex; flex-direction: column; gap: 15px;">
+                
+                <div class="card" style="border-color: var(--cyber-blue); background: #0b0f19; padding: 15px;">
+                    <div class="profile-header">
+                        <div>
+                            <h2 id="focus-name" class="profile-name">NO TARGET</h2>
+                            <div id="focus-id" style="color: #555; font-size: 0.85em; font-family: monospace; margin-top: 5px;">---</div>
+                        </div>
+                        <div id="focus-status" class="profile-status">STANDBY</div>
+                    </div>
+                    
+                    <div class="profile-details">
+                        <div class="detail-item"><div class="detail-label">Blood Type</div><div class="detail-val" id="focus-blood">--</div></div>
+                        <div class="detail-item"><div class="detail-label">Weapon S/N</div><div class="detail-val" id="focus-weapon">--</div></div>
+                        <div class="detail-item"><div class="detail-label">Vehicle S/N</div><div class="detail-val" id="focus-vehicle">--</div></div>
+                        <div class="detail-item"><div class="detail-label">Insurance</div><div class="detail-val" id="focus-insurance">--</div></div>
+                        <div class="detail-item" style="grid-column: span 2;"><div class="detail-label">Emergency Contact</div><div class="detail-val" id="focus-contact">--</div></div>
+                    </div>
+                </div>
+
+                <div class="card" style="flex: 1;">
+                    <h3 class="card-title">ACTIVITY TIMELINE</h3>
+                    <div class="timeline-container" id="timeline">
+                        <div style="text-align:center; color:#555; margin-top:20px;">Timeline will populate upon activity</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:flex; flex-direction: column; gap: 15px;">
+                
+                <div class="card" style="min-height: 200px;">
+                    <h3 class="card-title">TELEMETRY NOTIFICATION SETTINGS (TRIGGERS ALERTS)</h3>
+                    <div class="alert-settings-grid" id="alert-settings-grid">
+                        </div>
+                </div>
+
+                <div class="card">
+                     <h3 class="card-title">COMMAND OVERRIDES</h3>
+                    <div class="alert-grid">
+                        <button class="cmd-btn" onclick="triggerTest('All Clear')" style="background: var(--cyber-blue); color: #000;">ALL CLEAR</button>
+                        <button class="cmd-btn" onclick="triggerTest('Acknowledge SOS')" style="background: var(--focus-orange); color: #000;">ACK SOS</button>
+                        <button class="cmd-btn" onclick="triggerTest('Evacuate')" style="background: var(--alert-red); color: #fff;">EVACUATE</button>
+                        <button class="cmd-btn" onclick="exportCSV()" style="background: #333; color: #fff;">EXPORT CSV</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="sim-drawer" class="sim-drawer collapsed">
+        <div class="sim-header" onclick="toggleSimDrawer()">
+            <span>📱 Guard App Simulator (Demo)</span>
+            <span id="sim-toggle-icon">▲</span>
+        </div>
         
-        <div id="dashboard" class="view-panel active">
-            <div class="alert-banner" id="emergency-alert" style="display: none;">
-                <div><strong style="color:var(--alert-red); font-size:1.2em;">CRITICAL EMERGENCY</strong> <br> Guard: John Doe - Trigger: FALLING / IMPACT</div>
-                <button style="background:var(--alert-red); color:#fff;">INITIATE VIDEO LINK</button>
+        <div class="sim-body" id="sim-setup">
+            <div style="color: var(--cyber-blue); font-size: 0.9em; text-align: center; margin-bottom: 5px;">Guard Registration Form</div>
+            <input type="text" id="sim-name" placeholder="Full Name" value="John Doe (Demo Guard)">
+            
+            <div class="sim-input-grid">
+                <input type="text" id="sim-blood" placeholder="Blood Type" value="O+">
+                <input type="text" id="sim-weapon" placeholder="Weapon S/N" value="GLK-918273">
+                <input type="text" id="sim-vehicle" placeholder="Vehicle License Plate" value="77-382-99">
+                <input type="text" id="sim-insurance" placeholder="Insurance Details" value="Harel Life #812">
+            </div>
+            <input type="text" id="sim-contact" placeholder="Emergency Contact" value="Jane Doe - 054-1234567">
+            
+            <div class="mock-toggle">
+                <input type="checkbox" id="sim-use-mock" checked style="width: auto; accent-color: var(--focus-orange); transform: scale(1.3);"> 
+                <label for="sim-use-mock">Use Mock Sensors <br><span style="font-size: 0.8em; color: #888;">(Keep checked if presenting on a PC/Laptop without Gyroscope)</span></label>
             </div>
 
-            <div class="grid-2">
-                <div class="card">
-                    <h3>Active Roster & Status</h3>
-                    <div style="display:flex; justify-content: space-between; border-bottom:1px solid #333; padding:10px 0;">
-                        <span>John Doe (ID: 442)</span>
-                        <span style="color: #00ff00;">Walking / Patrol</span>
-                    </div>
-                    <div style="display:flex; justify-content: space-between; border-bottom:1px solid #333; padding:10px 0;">
-                        <span>Jane Smith (ID: 911)</span>
-                        <span style="color: var(--focus-orange);">Sitting / Guarding</span>
-                    </div>
-                </div>
-                
-                <div class="card">
-                    <h3>Task Completion Status</h3>
-                    <div style="display:flex; align-items:center; gap: 10px; margin-bottom: 10px;">
-                        <div style="width:15px; height:15px; background: #00ff00; border-radius:50%;"></div> Server Room 1 (Stamp + Image Verified)
-                    </div>
-                    <div style="display:flex; align-items:center; gap: 10px;">
-                        <div style="width:15px; height:15px; background: var(--alert-red); border-radius:50%;"></div> North Gate Check (Missed)
-                    </div>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3>Location Timeline (Top 3 Positioner Signals)</h3>
-                <p style="font-size: 0.8em; color: #888; margin-top:-10px;">Tracking distance relative to known BLE beacons via encrypted mesh data.</p>
-                <div class="chart-container">
-                    <canvas id="locationChart"></canvas>
-                </div>
-            </div>
+            <button class="sim-btn" onclick="startSimulatedShift()">Connect & Start Patrol</button>
         </div>
 
-        <div id="tasks" class="view-panel">
-            <div class="card" style="max-width: 600px;">
-                <h3>Assign New Task</h3>
-                <label>Guard Username</label>
-                <input type="text" placeholder="e.g. jdoe_442">
-                
-                <label>Time</label>
-                <input type="time">
-                
-                <label>Positioner Location</label>
-                <select>
-                    <option>Server Room 1</option>
-                    <option>Floor 2 - North East</option>
-                </select>
-                
-                <label>Task Instructions (Triggers Camera)</label>
-                <input type="text" placeholder="Check temperature and water levels">
-                
-                <button>Schedule & Sync to Guard</button>
+        <div class="sim-body" id="sim-controls" style="display:none;">
+            <div style="text-align: center; color: #00ff00; font-weight: bold; margin-bottom: 10px; font-size: 1.1em;">
+                <span style="display:inline-block; width:10px; height:10px; background:#00ff00; border-radius:50%; margin-right:5px; animation: pulse 1s infinite;"></span>
+                Transmitting Telemetry...
             </div>
-        </div>
+            
+            <div style="display: flex; gap: 10px;">
+                <button class="sim-btn" onclick="sendSimStatus('SOS / Emergency')" style="background: var(--alert-red); flex: 1; font-size: 1.2em;">🚨 TRIGGER SOS</button>
+                <button class="sim-btn" onclick="clearSimStatus()" style="background: var(--cyber-blue); color: #000; flex: 1;">🔵 Normal / Clear</button>
+            </div>
 
-        <div id="comms" class="view-panel">
-            <div class="grid-2" style="height: 100%;">
-                <div class="card" style="display:flex; flex-direction:column;">
-                    <h3>Public Group Chat (Mesh Broadcast)</h3>
-                    <div style="flex:1; background:#000; padding:10px; overflow-y:auto; margin-bottom:10px; border:1px solid #333;">
-                        <p><strong style="color:var(--cyber-blue)">System:</strong> Shift change in 10 mins.</p>
-                    </div>
-                    <div style="display:flex; gap:10px;">
-                        <input type="text" style="margin:0;" placeholder="Message all guards...">
-                        <button>Send</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3>Video Comm Link</h3>
-                    <div style="width:100%; height: 200px; background:#222; display:flex; align-items:center; justify-content:center; border: 1px dashed var(--cyber-blue);">
-                        Video Stream Offline
-                    </div>
-                    <button style="margin-top:15px; width:100%;">Start Private Call with Selected Guard</button>
+            <div id="mock-controls" style="display: none; background: #0b0f19; padding: 15px; border-radius: 8px; border: 1px solid #333; margin-top: 10px;">
+                <div style="color: #aaa; font-size: 0.85em; margin-bottom: 10px; text-align: center;">Mock Sensor Activity Generator</div>
+                <div style="display: flex; gap: 5px;">
+                    <button class="cmd-btn" style="flex:1; background: #222; color:#fff;" onclick="setMockState('sit')">Sitting</button>
+                    <button class="cmd-btn" style="flex:1; background: #222; color:#fff;" onclick="setMockState('walk')">Walking</button>
+                    <button class="cmd-btn" style="flex:1; background: #222; color:#fff;" onclick="setMockState('run')">Running</button>
                 </div>
             </div>
-        </div>
 
-        <div id="setup" class="view-panel">
-            <div class="card" style="max-width: 600px;">
-                <h3>Initialize New Positioner (BLE Unit)</h3>
-                <p style="font-size:0.85em; color:var(--text-muted)">Configure ESP32 beacon parameters. The system will synchronize the cryptographic unique stamp seed.</p>
-                
-                <label>Unit Name</label>
-                <input type="text" placeholder="e.g., Server Room 1">
-                
-                <label>Floor Level</label>
-                <input type="number" placeholder="e.g., 2">
-                
-                <label>Transmission Power (Range)</label>
-                <select>
-                    <option>High (Long Range)</option>
-                    <option>Medium (Room level)</option>
-                    <option>Low (Proximity only)</option>
-                </select>
-                
-                <button style="background: var(--focus-orange); color:#fff;">Pair & Register Unit to Mesh</button>
-            </div>
+            <button class="sim-btn" onclick="stopSimulatedShift()" style="background: #333; margin-top: 10px;">End Demo Session</button>
         </div>
-
     </div>
 
     <script>
-        // Navigation Logic
-        function switchView(viewId) {
-            document.querySelectorAll('.view-panel').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById(viewId).classList.add('active');
-            event.target.classList.add('active');
+        // ========================================================
+        // 1. FIREBASE SETUP
+        // ========================================================
+        const firebaseConfig = {
+          apiKey: "AIzaSyAB2OJTPCyJaZ0BpE-FAEKdPW143VE3YDo",
+          authDomain: "focushls-live.firebaseapp.com",
+          projectId: "focushls-live",
+          storageBucket: "focushls-live.firebasestorage.app",
+          messagingSenderId: "155686668050",
+          appId: "1:155686668050:web:ec06db6910733f53bad5cb"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // ========================================================
+        // 2. DASHBOARD GLOBALS & CHART INIT
+        // ========================================================
+        let currentSID = null;
+        let activeSessions = {};
+        let telChart = null;
+        let stats = {};
+        let gData = { ax: new Array(100).fill(0), ay: new Array(100).fill(0), az: new Array(100).fill(9.8) };
+        let playbackQueue = [];
+
+        // --- NEW: THE 20 TELEMETRY STATES FROM RESEARCH ---
+        const telemetryStates = [
+            "SOS / Emergency", "Man Down / Immobility", "Sleeping / Inactive", 
+            "Sitting / Guarding", "Standing", "Standing Still", "Walking / Patrol", 
+            "Running / Sprinting", "Climbing Stairs", "Elevator Up", "Elevator Down", 
+            "Escalator", "Driving / Mobile", "Crash Impact", "Gone Rogue", 
+            "Fighting / Struggle", "Crawling", "Jumping", "Medical Assist Req", 
+            "Reinforcement Req"
+        ];
+        
+        // Load default alerts (Critical items checked by default)
+        let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts')) || [
+            "SOS / Emergency", "Man Down / Immobility", "Sleeping / Inactive", 
+            "Crash Impact", "Gone Rogue", "Fighting / Struggle", 
+            "Medical Assist Req", "Reinforcement Req"
+        ];
+
+        function renderAlertSettings() {
+            const container = document.getElementById('alert-settings-grid');
+            container.innerHTML = '';
+            telemetryStates.forEach(state => {
+                const isChecked = alertSubscriptions.includes(state) ? 'checked' : '';
+                container.innerHTML += `
+                    <label>
+                        <input type="checkbox" value="${state}" ${isChecked} onchange="updateAlertSettings(this)">
+                        ${state}
+                    </label>
+                `;
+            });
         }
 
-        // Initialize Location Chart (Chart.js)
-        const ctx = document.getElementById('locationChart').getContext('2d');
-        const locationChart = new Chart(ctx, {
+        function updateAlertSettings(checkbox) {
+            if(checkbox.checked) {
+                if(!alertSubscriptions.includes(checkbox.value)) alertSubscriptions.push(checkbox.value);
+            } else {
+                alertSubscriptions = alertSubscriptions.filter(s => s !== checkbox.value);
+            }
+            localStorage.setItem('focus_alerts', JSON.stringify(alertSubscriptions));
+        }
+
+        renderAlertSettings();
+
+        function triggerSystemAlert(guardName, status) {
+            // Flash screen red and notify manager
+            const body = document.getElementById('main-body');
+            body.style.animation = "pulse 1s infinite";
+            setTimeout(() => { body.style.animation = ""; }, 3000); // Flash for 3 seconds
+            console.log("CRITICAL ALERT DETECTED:", status, "from", guardName);
+            // Optionally add an HTML5 Audio sound here: new Audio('alarm.mp3').play();
+        }
+
+        // Setup Telemetry Chart
+        const ctxTel = document.getElementById('telChart').getContext('2d');
+        telChart = new Chart(ctxTel, {
             type: 'line',
             data: {
-                labels: ['14:00', '14:05', '14:10', '14:15', '14:20', '14:25', '14:30'],
+                labels: new Array(100).fill(''),
                 datasets: [
-                    {
-                        label: 'Server Room 1 (Distance/Signal)',
-                        data: [-90, -80, -45, -40, -50, -85, -95],
-                        borderColor: '#00b4d8',
-                        tension: 0.4,
-                        borderWidth: 2
-                    },
-                    {
-                        label: 'Floor 2 - North East',
-                        data: [-60, -55, -80, -90, -95, -95, -95],
-                        borderColor: '#f77f00',
-                        tension: 0.4,
-                        borderWidth: 2
-                    },
-                    {
-                        label: 'Lobby Entrance',
-                        data: [-95, -95, -95, -95, -90, -70, -50],
-                        borderColor: '#d90429',
-                        tension: 0.4,
-                        borderWidth: 2
-                    }
+                    { label: 'X Axis', data: gData.ax, borderColor: '#ff0055', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+                    { label: 'Y Axis', data: gData.ay, borderColor: '#00ff00', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+                    { label: 'Z Axis', data: gData.az, borderColor: '#00b4d8', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }
                 ]
             },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { 
-                        title: { display: true, text: 'Signal Strength (dBm)', color: '#8892b0' },
-                        grid: { color: '#1a2235' }
-                    },
-                    x: { grid: { color: '#1a2235' } }
+                responsive: true, maintainAspectRatio: false, animation: false,
+                scales: { 
+                    y: { min: -25, max: 25, display: true, grid: { color: '#222' }, ticks: { color: '#555' } }, 
+                    x: { display: false } 
                 },
-                plugins: {
-                    legend: { labels: { color: '#caf0f8' } }
-                }
+                plugins: { legend: { display: true, position: 'top', labels: {color: '#888', boxWidth: 10} } }
             }
         });
 
-        // Mock Emergency Detection Logic (Demonstrating connection to Guard app's sleeping/falling states)
-        setTimeout(() => {
-            // Trigger emergency banner
-            document.getElementById('emergency-alert').style.display = 'flex';
-        }, 8000);
-
-        /* Backend Anti-Cheating Logic (Conceptual):
-        function verifyTask(guardSubmittedStamp, positionerName) {
-            let serverGeneratedStamp = generateServerSideTOTP(positionerName);
-            if (guardSubmittedStamp === serverGeneratedStamp) {
-                // Mark location part Green
-                if (imageProvided) return "COMPLETED_GREEN";
-                else return "PENDING_BLUE"; // Needs image
+        // ========================================================
+        // 3. LISTEN TO FIREBASE (Manager UI)
+        // ========================================================
+        db.ref('active_shifts').on('value', (snapshot) => {
+            const data = snapshot.val();
+            const list = document.getElementById('session-list');
+            list.innerHTML = '';
+            
+            if(!data) {
+                activeSessions = {};
+                document.getElementById('active-count').innerText = "0";
+                list.innerHTML = '<div style="padding: 20px; text-align: center; color: #555;">No active units in the field.</div>';
+                if(currentSID) deselectSession();
+                return;
             }
-            return "MISSED_RED";
+
+            activeSessions = data;
+            document.getElementById('active-count').innerText = Object.keys(data).length;
+
+            if(currentSID && !activeSessions[currentSID]) deselectSession();
+
+            Object.keys(data).forEach(sid => {
+                const s = data[sid];
+                const div = document.createElement('div');
+                div.className = 'session-item' + (currentSID === sid ? ' active' : '');
+                
+                let color = "#aaa";
+                let isAlert = alertSubscriptions.includes(s.status); // Check against manager settings
+
+                if(isAlert) {
+                    color = "var(--alert-red)";
+                } else if(s.status && s.status.includes('Patrol')) {
+                    color = "var(--cyber-blue)";
+                }
+
+                div.innerHTML = `
+                    <div style="flex:1" onclick="selectSession('${sid}')">
+                        <strong style="color:#fff; font-size:1.1em;">${s.name || 'Unknown Guard'}</strong><br>
+                        <span style="color:${color}; font-weight: ${isAlert ? 'bold' : 'normal'}">${s.status || 'Standby'}</span>
+                    </div>
+                    <button class="del-btn" onclick="deleteSession('${sid}', event)" title="End Session">×</button>
+                `;
+                list.appendChild(div);
+
+                // Global Alert Check across all guards
+                if(isAlert && s.status !== s._lastNotifiedStatus) {
+                    triggerSystemAlert(s.name, s.status);
+                    db.ref(`active_shifts/${sid}/_lastNotifiedStatus`).set(s.status); // Prevent repeating alert
+                }
+
+                // Update UI if this is the currently viewed session
+                if(sid === currentSID) {
+                    updateFocusUI(s);
+                    if(s.telemetry_batch && s.telemetry_batch.data) {
+                        playbackQueue = playbackQueue.concat(s.telemetry_batch.data);
+                    }
+                }
+            });
+        });
+
+        function updateFocusUI(s) {
+            const statusEl = document.getElementById('focus-status');
+            statusEl.innerText = s.status || 'STANDBY';
+            
+            let isAlert = alertSubscriptions.includes(s.status);
+            
+            if(isAlert) {
+                statusEl.className = 'profile-status alert';
+            } else {
+                statusEl.className = 'profile-status';
+                statusEl.style.background = s.status && s.status.includes('Patrol') ? 'var(--cyber-blue)' : '#333';
+                statusEl.style.color = s.status && s.status.includes('Patrol') ? '#000' : '#fff';
+            }
+
+            if(s.status && s.status !== window.lastStatus) {
+                window.lastStatus = s.status;
+                const timeStr = new Date().toLocaleTimeString();
+                const tl = document.getElementById('timeline');
+                if(tl.innerHTML.includes("Timeline will populate")) tl.innerHTML = '';
+                
+                let tagColor = "var(--cyber-blue)";
+                let textColor = "#000";
+                
+                if(isAlert) { tagColor = "var(--alert-red)"; textColor="#fff"; }
+                else if(s.status && (s.status.includes('Sitting') || s.status.includes('Sleeping'))) tagColor = "#f77f00";
+                
+                tl.innerHTML = `
+                    <div class="time-entry">
+                        <span style="color:#888; font-family:monospace;">[${timeStr}]</span>
+                        <span class="status-tag" style="background:${tagColor}; color:${textColor}">${s.status}</span>
+                    </div>
+                ` + tl.innerHTML;
+
+                if(!stats[s.status]) stats[s.status] = 0;
+                stats[s.status]++;
+            }
         }
-        */
+
+        function selectSession(sid) {
+            currentSID = sid;
+            const s = activeSessions[sid];
+            
+            document.getElementById('focus-name').innerText = s.name || 'Unknown Guard';
+            document.getElementById('focus-id').innerText = "ID: " + sid;
+            document.getElementById('focus-blood').innerText = s.bloodType || "N/A";
+            document.getElementById('focus-weapon').innerText = s.weapon || "N/A";
+            document.getElementById('focus-vehicle').innerText = s.vehicle || "N/A";
+            document.getElementById('focus-insurance').innerText = s.insurance || "N/A";
+            document.getElementById('focus-contact').innerText = s.contact || "N/A";
+            
+            document.getElementById('tel-overlay').style.display = 'none';
+            document.getElementById('timeline').innerHTML = '';
+            stats = {};
+            window.lastStatus = null;
+            playbackQueue = [];
+            
+            updateFocusUI(s);
+        }
+
+        function deselectSession() {
+            currentSID = null;
+            document.getElementById('focus-name').innerText = 'NO TARGET';
+            document.getElementById('focus-id').innerText = '---';
+            document.getElementById('focus-blood').innerText = '--';
+            document.getElementById('focus-weapon').innerText = '--';
+            document.getElementById('focus-vehicle').innerText = '--';
+            document.getElementById('focus-insurance').innerText = '--';
+            document.getElementById('focus-contact').innerText = '--';
+            
+            const statusEl = document.getElementById('focus-status');
+            statusEl.innerText = 'STANDBY';
+            statusEl.className = 'profile-status';
+            statusEl.style.background = '#333';
+            statusEl.style.color = '#fff';
+            document.getElementById('tel-overlay').style.display = 'flex';
+            document.getElementById('timeline').innerHTML = '<div style="text-align:center; color:#555; margin-top:20px;">Timeline will populate upon activity</div>';
+            stats = {};
+        }
+
+        function deleteSession(sid, e) {
+            e.stopPropagation();
+            if(confirm("Terminate this guard's session?")) {
+                db.ref('active_shifts/' + sid).remove();
+            }
+        }
+
+        // Fast graph updater (consumes playback queue)
+        setInterval(() => {
+            if(playbackQueue.length > 0) {
+                const f = playbackQueue.shift();
+                gData.ax.push(f.ax); gData.ax.shift();
+                gData.ay.push(f.ay); gData.ay.shift();
+                gData.az.push(f.az); gData.az.shift();
+                if(telChart) telChart.update();
+            }
+        }, 10);
+        
+        function triggerTest(status) {
+            if(!currentSID) return alert("Select a session first to send override.");
+            db.ref(`active_shifts/${currentSID}`).update({ status: status, timestamp: Date.now() });
+        }
+
+        function exportCSV() {
+            let csv = "Time,Status\n";
+            stats && Object.keys(stats).forEach(k => csv += `${k},${stats[k]}\n`);
+            const blob = new Blob([csv], {type: 'text/csv'});
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', 'guard_report.csv');
+            a.click();
+        }
+
+        // ========================================================
+        // 4. GUARD SIMULATOR DRAWER
+        // ========================================================
+        let simSessionID = null;
+        let simActive = false;
+        let simBuffer = [];
+        let simInterval = null;
+        let simManualOverride = null;
+        let simMockInterval = null;
+        let currentMockState = 'sit';
+
+        function toggleSimDrawer() {
+            const drawer = document.getElementById('sim-drawer');
+            drawer.classList.toggle('collapsed');
+            document.getElementById('sim-toggle-icon').innerText = drawer.classList.contains('collapsed') ? '▲' : '▼';
+        }
+
+        async function startSimulatedShift() {
+            const useMock = document.getElementById('sim-use-mock').checked;
+            
+            const name = document.getElementById('sim-name').value || "Demo Guard";
+            const blood = document.getElementById('sim-blood').value || "N/A";
+            const weapon = document.getElementById('sim-weapon').value || "N/A";
+            const vehicle = document.getElementById('sim-vehicle').value || "N/A";
+            const insurance = document.getElementById('sim-insurance').value || "N/A";
+            const contact = document.getElementById('sim-contact').value || "N/A";
+            
+            simSessionID = "demo_" + Date.now();
+            simActive = true;
+            simManualOverride = null;
+            
+            db.ref('active_shifts/' + simSessionID).set({
+                id: simSessionID, name: name, bloodType: blood, weapon: weapon, vehicle: vehicle,
+                insurance: insurance, contact: contact, status: 'Connecting...', start_time: Date.now(),
+                telemetry_batch: null
+            });
+
+            document.getElementById('sim-setup').style.display = 'none';
+            document.getElementById('sim-controls').style.display = 'flex';
+            document.getElementById('sim-controls').style.flexDirection = 'column';
+
+            if(useMock) {
+                document.getElementById('mock-controls').style.display = 'block';
+                simMockInterval = setInterval(generateMockMotion, 100);
+            }
+            
+            simInterval = setInterval(() => {
+                if(simActive && simBuffer.length > 0) {
+                    const computedStatus = simResearchRecognition(simBuffer);
+                    const finalStatus = simManualOverride || computedStatus;
+                    db.ref('active_shifts/' + simSessionID).update({ 
+                        telemetry_batch: { data: simBuffer, id: Date.now() }, 
+                        status: finalStatus, timestamp: Date.now() 
+                    });
+                    simBuffer = [];
+                }
+            }, 1000);
+        }
+
+        function stopSimulatedShift() {
+            simActive = false;
+            clearInterval(simInterval);
+            clearInterval(simMockInterval);
+            if(simSessionID) db.ref('active_shifts/' + simSessionID).remove();
+            
+            document.getElementById('sim-setup').style.display = 'flex';
+            document.getElementById('sim-setup').style.flexDirection = 'column';
+            document.getElementById('sim-controls').style.display = 'none';
+            document.getElementById('mock-controls').style.display = 'none';
+        }
+
+        function setMockState(state) { currentMockState = state; }
+        
+        function generateMockMotion() {
+            let t = Date.now();
+            let ax=0, ay=0, az=9.8;
+            if(currentMockState === 'walk') {
+                ax = Math.sin(t / 200) * 3; ay = Math.cos(t / 200) * 3; az = 9.8 + Math.sin(t / 150) * 2;
+            } else if (currentMockState === 'run') {
+                ax = Math.sin(t / 100) * 8; ay = Math.cos(t / 100) * 8; az = 9.8 + Math.sin(t / 80) * 6;
+            } else { 
+                ax = (Math.random() - 0.5) * 0.5; ay = (Math.random() - 0.5) * 0.5; az = 9.8 + (Math.random() - 0.5) * 0.5;
+            }
+            simBuffer.push({ ax, ay, az, t });
+        }
+
+        function sendSimStatus(s) {
+            simManualOverride = s;
+            db.ref('active_shifts/' + simSessionID).update({ status: s, timestamp: Date.now() });
+        }
+
+        function clearSimStatus() { simManualOverride = null; }
+
+        function simResearchRecognition(data) {
+            let magnitudes = data.map(f => Math.sqrt(f.ax**2 + f.ay**2 + f.az**2));
+            let sma = magnitudes.reduce((a,b) => a + Math.abs(b - 9.81), 0) / magnitudes.length;
+            let variance = magnitudes.reduce((a,b) => a + Math.pow(b - 9.81, 2), 0) / magnitudes.length;
+            if (sma < 0.2 && variance < 0.05) return "Sitting / Guarding";
+            if (sma < 0.8 && variance < 0.4) return "Walking / Patrol";
+            if (sma >= 0.8) return "Running / Sprinting";
+            return "Unknown State";
+        }
     </script>
 </body>
 </html>
