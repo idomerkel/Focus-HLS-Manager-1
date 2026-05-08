@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus HLS - Command Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --cyber-blue: #00b4d8; --dark-bg: #0b0f19; --panel-bg: #1a2235; --focus-orange: #f77f00; --alert-red: #d90429; --text-muted: #8892b0; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--dark-bg); color: #caf0f8; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* SIDEBAR */
+        .sidebar { width: 300px; background: var(--panel-bg); border-right: 2px solid var(--cyber-blue); display: flex; flex-direction: column; }
+        .logo { padding: 20px; text-align: center; background: #000; border-bottom: 1px solid var(--cyber-blue); font-size: 24px; font-weight: bold; }
+        .logo span { color: var(--cyber-blue); }
+        .nav-btn { padding: 15px 20px; border-bottom: 1px solid #222; cursor: pointer; transition: 0.2s; font-weight: bold; }
+        .nav-btn:hover, .nav-btn.active { background: #111; color: var(--cyber-blue); border-left: 4px solid var(--cyber-blue); }
+        
+        /* MAIN CONTENT */
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .view-panel { display: none; padding: 20px; height: 100%; overflow-y: auto; }
+        .view-panel.active { display: flex; flex-direction: column; gap: 20px;}
+        
+        /* DASHBOARD GRID */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card { background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid #1a2235; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .card h3 { margin-top: 0; color: var(--text-muted); border-bottom: 1px solid #333; padding-bottom: 10px; }
+        
+        /* CHARTS & TIMELINE */
+        .chart-container { height: 250px; width: 100%; background: #000; border-radius: 8px; border: 1px solid var(--cyber-blue); padding: 10px;}
+        
+        /* ALERTS */
+        .alert-banner { background: rgba(217, 4, 41, 0.2); border: 1px solid var(--alert-red); padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(217, 4, 41, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(217, 4, 41, 0); } }
+
+        /* FORMS */
+        input, select { width: 100%; padding: 10px; background: #000; border: 1px solid #444; color: white; border-radius: 4px; margin-bottom: 15px; }
+        button { background: var(--cyber-blue); color: #000; border: none; padding: 10px 20px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="logo">FOCUS <span>HLS</span></div>
+        <div class="nav-btn active" onclick="switchView('dashboard')">Live Dashboard</div>
+        <div class="nav-btn" onclick="switchView('tasks')">Task & Calendar</div>
+        <div class="nav-btn" onclick="switchView('comms')">Communications</div>
+        <div class="nav-btn" onclick="switchView('setup')">Positioner Setup</div>
+    </div>
+
+    <div class="main-content">
+        
+        <div id="dashboard" class="view-panel active">
+            <div class="alert-banner" id="emergency-alert" style="display: none;">
+                <div><strong style="color:var(--alert-red); font-size:1.2em;">CRITICAL EMERGENCY</strong> <br> Guard: John Doe - Trigger: FALLING / IMPACT</div>
+                <button style="background:var(--alert-red); color:#fff;">INITIATE VIDEO LINK</button>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <h3>Active Roster & Status</h3>
+                    <div style="display:flex; justify-content: space-between; border-bottom:1px solid #333; padding:10px 0;">
+                        <span>John Doe (ID: 442)</span>
+                        <span style="color: #00ff00;">Walking / Patrol</span>
+                    </div>
+                    <div style="display:flex; justify-content: space-between; border-bottom:1px solid #333; padding:10px 0;">
+                        <span>Jane Smith (ID: 911)</span>
+                        <span style="color: var(--focus-orange);">Sitting / Guarding</span>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>Task Completion Status</h3>
+                    <div style="display:flex; align-items:center; gap: 10px; margin-bottom: 10px;">
+                        <div style="width:15px; height:15px; background: #00ff00; border-radius:50%;"></div> Server Room 1 (Stamp + Image Verified)
+                    </div>
+                    <div style="display:flex; align-items:center; gap: 10px;">
+                        <div style="width:15px; height:15px; background: var(--alert-red); border-radius:50%;"></div> North Gate Check (Missed)
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Location Timeline (Top 3 Positioner Signals)</h3>
+                <p style="font-size: 0.8em; color: #888; margin-top:-10px;">Tracking distance relative to known BLE beacons via encrypted mesh data.</p>
+                <div class="chart-container">
+                    <canvas id="locationChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div id="tasks" class="view-panel">
+            <div class="card" style="max-width: 600px;">
+                <h3>Assign New Task</h3>
+                <label>Guard Username</label>
+                <input type="text" placeholder="e.g. jdoe_442">
+                
+                <label>Time</label>
+                <input type="time">
+                
+                <label>Positioner Location</label>
+                <select>
+                    <option>Server Room 1</option>
+                    <option>Floor 2 - North East</option>
+                </select>
+                
+                <label>Task Instructions (Triggers Camera)</label>
+                <input type="text" placeholder="Check temperature and water levels">
+                
+                <button>Schedule & Sync to Guard</button>
+            </div>
+        </div>
+
+        <div id="comms" class="view-panel">
+            <div class="grid-2" style="height: 100%;">
+                <div class="card" style="display:flex; flex-direction:column;">
+                    <h3>Public Group Chat (Mesh Broadcast)</h3>
+                    <div style="flex:1; background:#000; padding:10px; overflow-y:auto; margin-bottom:10px; border:1px solid #333;">
+                        <p><strong style="color:var(--cyber-blue)">System:</strong> Shift change in 10 mins.</p>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" style="margin:0;" placeholder="Message all guards...">
+                        <button>Send</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Video Comm Link</h3>
+                    <div style="width:100%; height: 200px; background:#222; display:flex; align-items:center; justify-content:center; border: 1px dashed var(--cyber-blue);">
+                        Video Stream Offline
+                    </div>
+                    <button style="margin-top:15px; width:100%;">Start Private Call with Selected Guard</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="setup" class="view-panel">
+            <div class="card" style="max-width: 600px;">
+                <h3>Initialize New Positioner (BLE Unit)</h3>
+                <p style="font-size:0.85em; color:var(--text-muted)">Configure ESP32 beacon parameters. The system will synchronize the cryptographic unique stamp seed.</p>
+                
+                <label>Unit Name</label>
+                <input type="text" placeholder="e.g., Server Room 1">
+                
+                <label>Floor Level</label>
+                <input type="number" placeholder="e.g., 2">
+                
+                <label>Transmission Power (Range)</label>
+                <select>
+                    <option>High (Long Range)</option>
+                    <option>Medium (Room level)</option>
+                    <option>Low (Proximity only)</option>
+                </select>
+                
+                <button style="background: var(--focus-orange); color:#fff;">Pair & Register Unit to Mesh</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Navigation Logic
+        function switchView(viewId) {
+            document.querySelectorAll('.view-panel').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // Initialize Location Chart (Chart.js)
+        const ctx = document.getElementById('locationChart').getContext('2d');
+        const locationChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['14:00', '14:05', '14:10', '14:15', '14:20', '14:25', '14:30'],
+                datasets: [
+                    {
+                        label: 'Server Room 1 (Distance/Signal)',
+                        data: [-90, -80, -45, -40, -50, -85, -95],
+                        borderColor: '#00b4d8',
+                        tension: 0.4,
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Floor 2 - North East',
+                        data: [-60, -55, -80, -90, -95, -95, -95],
+                        borderColor: '#f77f00',
+                        tension: 0.4,
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Lobby Entrance',
+                        data: [-95, -95, -95, -95, -90, -70, -50],
+                        borderColor: '#d90429',
+                        tension: 0.4,
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { 
+                        title: { display: true, text: 'Signal Strength (dBm)', color: '#8892b0' },
+                        grid: { color: '#1a2235' }
+                    },
+                    x: { grid: { color: '#1a2235' } }
+                },
+                plugins: {
+                    legend: { labels: { color: '#caf0f8' } }
+                }
+            }
+        });
+
+        // Mock Emergency Detection Logic (Demonstrating connection to Guard app's sleeping/falling states)
+        setTimeout(() => {
+            // Trigger emergency banner
+            document.getElementById('emergency-alert').style.display = 'flex';
+        }, 8000);
+
+        /* Backend Anti-Cheating Logic (Conceptual):
+        function verifyTask(guardSubmittedStamp, positionerName) {
+            let serverGeneratedStamp = generateServerSideTOTP(positionerName);
+            if (guardSubmittedStamp === serverGeneratedStamp) {
+                // Mark location part Green
+                if (imageProvided) return "COMPLETED_GREEN";
+                else return "PENDING_BLUE"; // Needs image
+            }
+            return "MISSED_RED";
+        }
+        */
+    </script>
+</body>
+</html>
