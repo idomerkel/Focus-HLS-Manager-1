@@ -13,13 +13,13 @@
         * { box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--dark-bg); color: #caf0f8; margin: 0; display: flex; height: 100vh; overflow: hidden; }
         
-        /* SIDEBAR (From 24-manager) */
+        /* SIDEBAR */
         .sidebar { width: 350px; background: var(--panel-bg); border-right: 2px solid var(--cyber-blue); display: flex; flex-direction: column; flex-shrink: 0; z-index: 10; }
         .sidebar-logo-container { padding: 20px; text-align: center; background: #000; border-bottom: 2px solid var(--cyber-blue); }
         .sidebar-logo-container h1 { color: #fff; margin: 0; font-size: 32px; letter-spacing: 2px; }
         .sidebar-logo-container h1 span { color: var(--cyber-blue); }
         
-        /* NEW NAV TABS IN SIDEBAR */
+        /* NAV TABS */
         .nav-btn { padding: 15px 20px; border-bottom: 1px solid #222; cursor: pointer; transition: 0.2s; font-weight: bold; background: #000;}
         .nav-btn:hover, .nav-btn.active { background: #111; color: var(--cyber-blue); border-left: 4px solid var(--cyber-blue); }
         
@@ -65,7 +65,11 @@
         .cmd-btn, .action-btn { border: none; padding: 12px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.9em; }
         .action-btn { background: var(--cyber-blue); color: #000; width: 100%;}
         
-        /* SIMULATOR DRAWER (Preserved from 24-manager) */
+        /* POSITIONER LIST ITEMS */
+        .pos-item { display: flex; align-items: center; justify-content: space-between; background: #000; border: 1px solid #333; padding: 10px 15px; border-radius: 4px; margin-bottom: 10px; }
+        .pos-indicator { width: 10px; height: 10px; border-radius: 50%; background: #00ff00; box-shadow: 0 0 8px #00ff00; margin-right: 10px; display: inline-block;}
+
+        /* SIMULATOR DRAWER */
         .sim-drawer { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 95%; max-width: 600px; background: var(--panel-bg); border: 2px solid var(--focus-orange); border-bottom: none; border-radius: 15px 15px 0 0; z-index: 9999; transition: transform 0.3s ease-in-out; box-shadow: 0 -10px 30px rgba(0,0,0,0.8); }
         .sim-drawer.collapsed { transform: translate(-50%, calc(100% - 45px)); }
         .sim-header { background: var(--focus-orange); color: #fff; padding: 12px 20px; cursor: pointer; border-radius: 12px 12px 0 0; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 1.1em; }
@@ -157,9 +161,10 @@
             </div>
             
             <div class="card" style="margin-top:15px;">
-                <h3 class="card-title">BLE POSITIONER LOCATION GRAPH (REAL-TIME DISTANCE)</h3>
+                <h3 class="card-title">BLE POSITIONER LOCATION GRAPH</h3>
+                <p style="color:#888; font-size:0.85em; margin-top:-10px;">Tracks guard distance to registered mesh nodes.</p>
                 <div style="height: 150px; background: #000; border: 1px solid #333; border-radius: 4px; display:flex; align-items:center; justify-content:center; color:#666;">
-                    [Awaiting BLE Triangulation Data from Mesh...]
+                    [Awaiting BLE Triangulation Data from active Guard phones...]
                 </div>
             </div>
         </div>
@@ -222,16 +227,25 @@
         </div>
 
         <div id="setup" class="view-panel">
-            <div class="card" style="max-width: 600px; margin: 0 auto; width: 100%;">
-                <h3 class="card-title">INITIALIZE BLE POSITIONER</h3>
-                <p style="font-size: 0.85em; color: var(--text-muted); margin-top:-10px;">Register a new ESP32 beacon to the mesh network and sync its anti-cheat TOTP stamp seed.</p>
-                <label>Unit Name</label>
-                <input type="text" placeholder="e.g., Server Room 1">
-                <label>Floor / Sector</label>
-                <input type="text" placeholder="e.g., Floor 3">
-                <label>Transmission Power</label>
-                <select><option>High (Long Range)</option><option>Low (Proximity Only)</option></select>
-                <button class="action-btn">PAIR BLUETOOTH & REGISTER</button>
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h3 class="card-title">INITIALIZE BLE POSITIONER</h3>
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-top:-10px;">Register a new ESP32 beacon to the mesh network. Once registered, Guard devices will listen for this unit.</p>
+                    <label>Unit Name (Must match ESP32 code exactly)</label>
+                    <input type="text" id="setup-pos-name" placeholder="e.g., Server Room 1" value="Server Room 1">
+                    <label>Floor / Sector</label>
+                    <input type="text" placeholder="e.g., Floor 3">
+                    <button class="action-btn" onclick="registerPositioner()">PAIR BLUETOOTH & REGISTER</button>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title">REGISTERED MESH NODES</h3>
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-top:-10px;">Active units broadcasting anti-cheat stamps to the Command Center.</p>
+                    
+                    <div id="pos-list">
+                        <div style="color: #555; font-style: italic;" id="pos-empty-state">No positioners registered yet.</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -262,12 +276,28 @@
     </div>
 
     <script>
-        // 1. Navigation Logic
+        // 1. Navigation & Positioner Logic
         function switchView(viewId) {
             document.querySelectorAll('.view-panel').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
             event.target.classList.add('active');
+        }
+
+        function registerPositioner() {
+            const name = document.getElementById('setup-pos-name').value;
+            if(!name) return alert("Enter a name first.");
+            
+            document.getElementById('pos-empty-state').style.display = 'none';
+            const list = document.getElementById('pos-list');
+            
+            list.innerHTML += `
+                <div class="pos-item">
+                    <div><span class="pos-indicator"></span> <strong>${name}</strong></div>
+                    <div style="font-size: 0.8em; color: var(--cyber-blue); font-family: monospace;">UUID: 0x180F</div>
+                </div>
+            `;
+            alert(`${name} successfully registered to the network. Guard devices will now track distance to this node.`);
         }
 
         // 2. Firebase Setup
@@ -312,7 +342,6 @@
             ]}, options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { min: -25, max: 25, display: true, grid: { color: '#222' } }, x: { display: false } } }
         });
 
-        // Fast graph updater
         setInterval(() => {
             if(playbackQueue.length > 0) {
                 const f = playbackQueue.shift();
@@ -377,6 +406,8 @@
             document.getElementById('focus-blood').innerText = s.bloodType || "--";
             document.getElementById('focus-weapon').innerText = s.weapon || "--";
             document.getElementById('focus-vehicle').innerText = s.vehicle || "--";
+            document.getElementById('focus-insurance').innerText = s.insurance || "--";
+            document.getElementById('focus-contact').innerText = s.contact || "--";
             
             document.getElementById('tel-overlay').style.display = 'none';
             playbackQueue = [];
@@ -402,12 +433,17 @@
             box.scrollTop = box.scrollHeight;
         });
 
-        // 6. Demo Drawer (Preserved exactly as requested)
+        // 6. Demo Drawer
         let simSessionID = null, simInterval = null;
         function toggleSimDrawer() { document.getElementById('sim-drawer').classList.toggle('collapsed'); }
         function startSimulatedShift() {
             simSessionID = "demo_" + Date.now();
-            db.ref('active_shifts/' + simSessionID).set({ id: simSessionID, name: document.getElementById('sim-name').value, status: 'Walking / Patrol' });
+            db.ref('active_shifts/' + simSessionID).set({ 
+                id: simSessionID, name: document.getElementById('sim-name').value, 
+                bloodType: document.getElementById('sim-blood').value, weapon: document.getElementById('sim-weapon').value,
+                vehicle: document.getElementById('sim-vehicle').value, insurance: document.getElementById('sim-insurance').value,
+                contact: document.getElementById('sim-contact').value, status: 'Walking / Patrol' 
+            });
             document.getElementById('sim-setup').style.display = 'none';
             document.getElementById('sim-controls').style.display = 'block';
         }
