@@ -95,7 +95,7 @@
 
     <div id="global-ring-alert">
         🚨 INCOMING VIDEO CALL FROM GUARD 🚨<br>
-        <button onclick="switchView('comms'); document.getElementById('global-ring-alert').style.display='none';" style="margin-top:15px; padding:10px 20px; font-weight:bold; background:#fff; color:#000; border:none; border-radius:6px; cursor:pointer;">GO TO COMMS TAB TO ANSWER</button>
+        <button onclick="switchView('comms'); answerVideoCall();" style="margin-top:15px; padding:10px 20px; font-weight:bold; background:#fff; color:#000; border:none; border-radius:6px; cursor:pointer;">ANSWER CALL</button>
     </div>
 
     <div class="sidebar">
@@ -131,7 +131,7 @@
                             <h3 class="card-title" style="border:none; margin:0; padding:0;">GUARD TO NODE DISTANCES</h3>
                             <button class="action-btn" style="width: auto; padding: 5px 15px; font-size: 0.8em; background: #00e676;" onclick="openNodeModal()">ASSIGN NODE ALIAS</button>
                         </div>
-                        <p style="font-size:0.8em; color:#888; margin-top:0;">Resolves Android BLE Caching Bugs.</p>
+                        <p style="font-size:0.8em; color:#888; margin-top:0;">Distances physically measured and streamed by the Guard's device.</p>
                         <div style="flex: 1; min-height:150px; background: #000; border-radius: 6px; position:relative; padding: 5px;">
                             <canvas id="locChart"></canvas>
                         </div>
@@ -164,13 +164,14 @@
                     <label style="font-size:0.8em; color:#aaa;">Scheduled Time</label><input type="time" id="task-time">
                     <label style="font-size:0.8em; color:#aaa;">Instructions</label><input type="text" id="task-inst" placeholder="e.g., Secure perimeter doors">
                     <div style="display:flex; gap:10px;">
-                        <button id="btn-save-task" class="action-btn" onclick="scheduleTask()">Push New Task</button>
-                        <button id="btn-cancel-edit" class="action-btn" style="background:#333; color:#fff; display:none;" onclick="cancelEditTask()">Cancel Edit</button>
+                        <button id="btn-save-task" class="action-btn" onclick="scheduleTask()">Push Task</button>
+                        <button id="btn-delete-task" class="action-btn" style="background:var(--alert-red); color:#fff; display:none;" onclick="deleteTask()">Delete</button>
+                        <button id="btn-cancel-edit" class="action-btn" style="background:#333; color:#fff; display:none;" onclick="cancelEditTask()">Cancel</button>
                     </div>
                 </div>
                 <div class="card">
                     <h3 class="card-title">ACTIVE TASKS FOR TARGET</h3>
-                    <p style="font-size:0.8em; color:#888; margin-top:0;">Click a task to edit it.</p>
+                    <p style="font-size:0.8em; color:#888; margin-top:0;">Click a task to edit or delete it.</p>
                     <div id="task-list-display" style="flex:1; overflow-y:auto;"><div style="color:#555;">No user selected or no active tasks.</div></div>
                 </div>
             </div>
@@ -201,7 +202,6 @@
                     </div>
                     <div style="display:flex; gap:10px;">
                         <button style="background:var(--task-green);" class="action-btn" onclick="startManagerVideoCall()">CALL GUARD</button>
-                        <button style="background:var(--cyber-blue);" class="action-btn" onclick="answerVideoCall()">ANSWER CALL</button>
                         <button style="background:var(--alert-red);" class="action-btn" onclick="hangUp()">END CALL</button>
                     </div>
                 </div>
@@ -333,55 +333,33 @@
             else { posList.innerHTML = '<div style="color: #555;">No positioners registered.</div>'; }
         });
 
-        // --- NODE ALIAS SYSTEM (Bypasses Android Caching Bug) ---
+        // --- NODE ALIAS SYSTEM ---
         function openNodeModal() {
             if(!currentSID) return alert("Select a Target Guard from the sidebar first.");
             const s = activeSessions[currentSID];
-            if(!s || !s.ble_distances || Object.keys(s.ble_distances).length === 0) {
-                return alert("Guard is not currently transmitting any BLE nodes. Ensure they have scanned the area.");
-            }
-            
+            if(!s || !s.ble_distances || Object.keys(s.ble_distances).length === 0) return alert("Guard is not currently transmitting any BLE nodes.");
             const selectEl = document.getElementById('modal-node-select'); selectEl.innerHTML = '';
-            Object.keys(s.ble_distances).forEach(n => {
-                selectEl.innerHTML += `<option value="${n}">${n}</option>`;
-            });
-            document.getElementById('modal-node-alias').value = "";
-            document.getElementById('node-modal').style.display = 'flex';
+            Object.keys(s.ble_distances).forEach(n => { selectEl.innerHTML += `<option value="${n}">${n}</option>`; });
+            document.getElementById('modal-node-alias').value = ""; document.getElementById('node-modal').style.display = 'flex';
         }
-        
         function confirmNodeAlias() {
-            const rawName = document.getElementById('modal-node-select').value;
-            const aliasName = document.getElementById('modal-node-alias').value;
-            if(rawName && aliasName && currentSID) { 
-                db.ref(`active_shifts/${currentSID}/node_aliases/${rawName}`).set(aliasName); 
-                document.getElementById('node-modal').style.display = 'none'; 
-            }
+            const rawName = document.getElementById('modal-node-select').value; const aliasName = document.getElementById('modal-node-alias').value;
+            if(rawName && aliasName && currentSID) { db.ref(`active_shifts/${currentSID}/node_aliases/${rawName}`).set(aliasName); document.getElementById('node-modal').style.display = 'none'; }
         }
 
-        // --- CHART: Plots GUARD's Distance using Aliases ---
         function renderDistanceChart(guardData) {
             if(!guardData.ble_distances) { locChart.data.datasets = []; locChart.update(); document.getElementById('chart-legend').innerHTML = '<span style="color:#555;">No node data streaming.</span>'; return; }
-            
-            let legendHTML = ''; 
-            let activeNodes = Object.keys(guardData.ble_distances);
-            
+            let legendHTML = ''; let activeNodes = Object.keys(guardData.ble_distances);
             locChart.data.datasets = activeNodes.map((rawNodeName, index) => {
                 let color = nodeColors[index % nodeColors.length];
-                // Use Alias if it exists, otherwise raw name
                 let displayName = (guardData.node_aliases && guardData.node_aliases[rawNodeName]) ? guardData.node_aliases[rawNodeName] : rawNodeName;
-                
                 legendHTML += `<div class="legend-item"><div class="legend-color" style="background:${color};"></div>${displayName}</div>`;
-                
                 let existingDataset = locChart.data.datasets.find(d => d.label === displayName);
                 let dataArray = existingDataset ? existingDataset.data : new Array(30).fill(15);
-                dataArray.push(guardData.ble_distances[rawNodeName]); 
-                if(dataArray.length > 30) dataArray.shift();
-                
+                dataArray.push(guardData.ble_distances[rawNodeName]); if(dataArray.length > 30) dataArray.shift();
                 return { label: displayName, data: dataArray, borderColor: color, borderWidth: 2, tension: 0.3, fill: false };
             });
-            
-            document.getElementById('chart-legend').innerHTML = legendHTML; 
-            locChart.update();
+            document.getElementById('chart-legend').innerHTML = legendHTML; locChart.update();
         }
 
         // --- OTA NODE SETUP & MANAGER BLE SCAN ---
@@ -408,25 +386,25 @@
                 const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0x180F, TACTICAL_SERVICE_UUID] });
                 const server = await device.gatt.connect(); const service = await server.getPrimaryService(TACTICAL_SERVICE_UUID);
                 const characteristic = await service.getCharacteristic(SETUP_CHAR_UUID);
-                try { await characteristic.writeValue(new TextEncoder().encode(newName)); } catch (e) { /* Expected disconnect on ESP reboot */ }
+                try { await characteristic.writeValue(new TextEncoder().encode(newName)); } catch (e) { }
                 alert(`Success! Node flashed as "${newName}".`);
                 if (server.connected) server.disconnect();
                 db.ref(`registered_nodes/${newName}`).set({ name: newName, timestamp: Date.now() }); document.getElementById("setup-pos-name").value = "";
             } catch (error) { alert("Setup Failed: " + error.message); }
         }
 
-        // --- TELEMETRY NOTIFICATIONS (Default SOS Only) ---
+        // --- TELEMETRY NOTIFICATIONS (Default SOS Only Fixed) ---
         const telemetryStates = ["SOS / Emergency", "Man Down / Immobility", "Loud Noise / Alarm", "Sleeping / Inactive", "Sitting / Guarding", "Standing", "Walking / Patrol", "Running / Sprinting", "Crash Impact", "Fighting / Struggle", "Medical Assist Req"];
         
-        if (!localStorage.getItem('focus_alerts_v4')) { localStorage.setItem('focus_alerts_v4', JSON.stringify(["SOS / Emergency"])); }
-        let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts_v4'));
+        if (!localStorage.getItem('focus_alerts_v5')) { localStorage.setItem('focus_alerts_v5', JSON.stringify(["SOS / Emergency"])); }
+        let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts_v5'));
         
         const alertContainer = document.getElementById('alert-settings-grid');
         telemetryStates.forEach(state => {
             const checked = alertSubscriptions.includes(state) ? 'checked' : '';
             alertContainer.innerHTML += `<label><input type="checkbox" value="${state}" ${checked} onchange="updateAlerts(this)"> ${state}</label>`;
         });
-        function updateAlerts(cb) { if(cb.checked) alertSubscriptions.push(cb.value); else alertSubscriptions = alertSubscriptions.filter(s => s !== cb.value); localStorage.setItem('focus_alerts_v4', JSON.stringify(alertSubscriptions)); }
+        function updateAlerts(cb) { if(cb.checked) alertSubscriptions.push(cb.value); else alertSubscriptions = alertSubscriptions.filter(s => s !== cb.value); localStorage.setItem('focus_alerts_v5', JSON.stringify(alertSubscriptions)); }
 
         // --- ANTI-FALSE "SLEEPING" MATH ENGINE ---
         function researchRecognition(data) {
@@ -512,14 +490,6 @@
             } else if (currentSID) { currentSID = null; document.getElementById('focus-name').innerText = "NO TARGET"; document.getElementById('focus-id').innerText = "---"; }
         });
 
-        // --- GLOBAL VIDEO CALL LISTENER ---
-        setTimeout(() => {
-            db.ref(`active_shifts/${managerId}/webrtc/offer`).on('value', snap => {
-                const offer = snap.val();
-                if(offer && !peerConnection) document.getElementById('global-ring-alert').style.display = 'block';
-            });
-        }, 3000);
-
         function allowDrop(ev) { ev.preventDefault(); ev.currentTarget.classList.add('drag-over'); } function leaveDrop(ev) { ev.currentTarget.classList.remove('drag-over'); }
         function drag(ev, sid) { ev.dataTransfer.setData("text", sid); } function drop(ev, groupName) { ev.preventDefault(); ev.currentTarget.classList.remove('drag-over'); let sid = ev.dataTransfer.getData("text"); if(sid) db.ref(`active_shifts/${sid}/group`).set(groupName); }
         function deleteUser(sid, event) { event.stopPropagation(); if(confirm("Permanently delete user?")) db.ref('active_shifts/' + sid).remove(); }
@@ -567,43 +537,45 @@
             if([...vidSel.options].some(o => o.value === currentVid)) vidSel.value = currentVid;
         }
 
-        // --- TASK EDITING LOGIC ---
+        // --- TASK EDITING & DELETION LOGIC ---
         function scheduleTask() {
             if(!currentSID) return alert("Select a Guard from the sidebar first.");
             const time = document.getElementById('task-time').value; const inst = document.getElementById('task-inst').value;
             const editId = document.getElementById('edit-task-id').value;
             if(!time || !inst) return alert("Fill out time and instructions.");
             
-            if (editId) {
-                db.ref(`active_shifts/${currentSID}/tasks/${editId}`).update({ time: time, instruction: inst, timestamp: Date.now() });
-            } else {
+            if (editId) db.ref(`active_shifts/${currentSID}/tasks/${editId}`).update({ time: time, instruction: inst, timestamp: Date.now() });
+            else {
                 const taskRef = db.ref(`active_shifts/${currentSID}/tasks`).push();
                 taskRef.set({ id: taskRef.key, time: time, instruction: inst, status: "pending", timestamp: Date.now() });
             }
             db.ref(`active_shifts/${currentSID}/new_task_trigger`).set(Date.now());
-            cancelEditTask();
-            alert('Task pushed to Guard.');
+            cancelEditTask(); alert('Task pushed to Guard.');
         }
 
         function prepareEditTask(id, time, inst) {
-            document.getElementById('edit-task-id').value = id;
-            document.getElementById('task-time').value = time;
-            document.getElementById('task-inst').value = inst;
-            document.getElementById('btn-save-task').innerText = "Update Task";
-            document.getElementById('btn-save-task').style.background = "#f39c12";
-            document.getElementById('btn-cancel-edit').style.display = "block";
+            document.getElementById('edit-task-id').value = id; document.getElementById('task-time').value = time; document.getElementById('task-inst').value = inst;
+            document.getElementById('btn-save-task').innerText = "Update Task"; document.getElementById('btn-save-task').style.background = "#f39c12";
+            document.getElementById('btn-cancel-edit').style.display = "block"; document.getElementById('btn-delete-task').style.display = "block";
         }
 
         function cancelEditTask() {
-            document.getElementById('edit-task-id').value = "";
-            document.getElementById('task-time').value = "";
-            document.getElementById('task-inst').value = "";
-            document.getElementById('btn-save-task').innerText = "Push New Task";
-            document.getElementById('btn-save-task').style.background = "var(--cyber-blue)";
-            document.getElementById('btn-cancel-edit').style.display = "none";
+            document.getElementById('edit-task-id').value = ""; document.getElementById('task-time').value = ""; document.getElementById('task-inst').value = "";
+            document.getElementById('btn-save-task').innerText = "Push Task"; document.getElementById('btn-save-task').style.background = "var(--cyber-blue)";
+            document.getElementById('btn-cancel-edit').style.display = "none"; document.getElementById('btn-delete-task').style.display = "none";
         }
 
-        // --- COMMS & WEBRTC ---
+        function deleteTask() {
+            const editId = document.getElementById('edit-task-id').value;
+            if(!editId || !currentSID) return;
+            if(confirm("Permanently delete this task?")) {
+                db.ref(`active_shifts/${currentSID}/tasks/${editId}`).remove();
+                db.ref(`active_shifts/${currentSID}/new_task_trigger`).set(Date.now());
+                cancelEditTask();
+            }
+        }
+
+        // --- COMMS & WEBRTC (UNIFIED SIGNALING) ---
         function sendManagerChat() {
             const target = document.getElementById('chat-target-select').value; const msg = document.getElementById('manager-chat-input').value; if(!msg) return;
             const chatBox = document.getElementById('manager-chat-box'); chatBox.innerHTML += `<div style="background:#111; padding:8px; border-radius:4px;"><strong style="color:var(--cyber-blue)">${myManagerName} (${target.replace('User_', '')}):</strong> ${msg}</div>`;
@@ -615,58 +587,59 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        let localStream; let peerConnection;
+        let localStream; let peerConnection; let activeCallChannel = null; let currentWebRTCOffer = null;
         const servers = { iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }] };
 
-        async function initPeerConnection(targetSid, role) {
+        async function initPeerConnection(channel, role) {
             localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             document.getElementById('localVideo').srcObject = localStream;
             peerConnection = new RTCPeerConnection(servers);
             localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
             peerConnection.ontrack = event => { document.getElementById('remoteVideo').srcObject = event.streams[0]; };
-            peerConnection.onicecandidate = event => { if (event.candidate) db.ref(`active_shifts/${targetSid}/webrtc/candidates/${role}`).push(event.candidate.toJSON()); };
+            peerConnection.onicecandidate = event => { if (event.candidate) db.ref(`${channel}/candidates/${role}`).push(event.candidate.toJSON()); };
         }
 
+        // 1. Manager Initiates Call to Guard
         async function startManagerVideoCall() {
-            const targetSid = document.getElementById('video-target-select').value;
-            if(!targetSid) return alert("Select a guard to call!");
-            currentSID = targetSid; 
+            const targetSid = document.getElementById('video-target-select').value; if(!targetSid) return alert("Select a guard to call!");
+            currentSID = targetSid; activeCallChannel = `active_shifts/${targetSid}/webrtc`;
             
-            await initPeerConnection(targetSid, 'manager');
+            await initPeerConnection(activeCallChannel, 'manager');
             const offer = await peerConnection.createOffer(); await peerConnection.setLocalDescription(offer);
-            db.ref(`active_shifts/${targetSid}/webrtc/offer`).set({ type: offer.type, sdp: offer.sdp });
+            db.ref(`${activeCallChannel}/offer`).set({ type: offer.type, sdp: offer.sdp, caller: managerId });
             
-            db.ref(`active_shifts/${targetSid}/webrtc/answer`).on('value', snapshot => {
-                const answer = snapshot.val();
-                if(answer && peerConnection.currentRemoteDescription === null) peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            db.ref(`${activeCallChannel}/answer`).on('value', snapshot => {
+                const answer = snapshot.val(); if(answer && peerConnection.currentRemoteDescription === null) peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
             });
-            
-            db.ref(`active_shifts/${targetSid}/webrtc/candidates/guard`).on('child_added', snapshot => {
-                if(peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val()));
-            });
+            db.ref(`${activeCallChannel}/candidates/guard`).on('child_added', snapshot => { if(peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val())); });
             alert("Ringing Guard...");
         }
 
+        // 2. Manager Listens for Guard Calling Manager
+        db.ref(`active_shifts/${managerId}/webrtc/offer`).on('value', snap => {
+            const offer = snap.val();
+            if(offer && !peerConnection) {
+                activeCallChannel = `active_shifts/${managerId}/webrtc`;
+                currentWebRTCOffer = offer;
+                document.getElementById('global-ring-alert').style.display = 'block';
+            }
+        });
+
+        // 3. Manager Answers Guard
         async function answerVideoCall() {
+            if(!currentWebRTCOffer) return alert("No active incoming call.");
             document.getElementById('global-ring-alert').style.display = 'none';
-            const offerSnap = await db.ref(`active_shifts/${managerId}/webrtc/offer`).once('value');
-            const offer = offerSnap.val();
-            if(!offer) return alert("No active incoming call.");
-            
-            await initPeerConnection(managerId, 'manager');
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            await initPeerConnection(activeCallChannel, 'manager');
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(currentWebRTCOffer));
             const answer = await peerConnection.createAnswer(); await peerConnection.setLocalDescription(answer);
-            db.ref(`active_shifts/${managerId}/webrtc/answer`).set({ type: answer.type, sdp: answer.sdp });
-            
-            db.ref(`active_shifts/${managerId}/webrtc/candidates/guard`).on('child_added', snapshot => {
-                if(peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val()));
-            });
+            db.ref(`${activeCallChannel}/answer`).set({ type: answer.type, sdp: answer.sdp });
+            db.ref(`${activeCallChannel}/candidates/guard`).on('child_added', snapshot => { if(peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val())); });
         }
 
         function hangUp() {
             if(peerConnection) peerConnection.close(); if(localStream) localStream.getTracks().forEach(track => track.stop());
-            peerConnection = null; if(currentSID) db.ref(`active_shifts/${currentSID}/webrtc`).remove();
-            db.ref(`active_shifts/${managerId}/webrtc`).remove();
+            peerConnection = null; currentWebRTCOffer = null; document.getElementById('global-ring-alert').style.display = 'none';
+            if(activeCallChannel) db.ref(activeCallChannel).remove();
             document.getElementById('remoteVideo').srcObject = null; document.getElementById('localVideo').srcObject = null;
         }
 
@@ -683,7 +656,6 @@
             db.ref('active_shifts/' + simSessionID).update({ id: simSessionID, name: name, status: 'Connecting...' });
             document.getElementById('sim-setup').style.display = 'none'; document.getElementById('sim-controls').style.display = 'block'; document.getElementById('sim-active-name').innerText = name;
             
-            // 5 Unique Nodes for the Demo
             let simNodes = { "Main Gate": { base: 12, range: 2 }, "Server Room 1": { base: 3, range: 1 }, "Lobby": { base: 8, range: 3 }, "Perimeter North": { base: 15, range: 0.5 }, "Garage": { base: 6, range: 2 } };
 
             simInterval = setInterval(() => {
@@ -701,8 +673,7 @@
                 Object.keys(simNodes).forEach(n => {
                     if(!simDistances[n]) simDistances[n] = simNodes[n].base;
                     if(currentMockState !== 'sit') simDistances[n] += (Math.random() - 0.5) * simNodes[n].range;
-                    simDistances[n] = Math.max(0, Math.min(15, simDistances[n])); 
-                    distPayload[n] = simDistances[n];
+                    simDistances[n] = Math.max(0, Math.min(15, simDistances[n])); distPayload[n] = simDistances[n];
                 });
 
                 let s = activeSessions[simSessionID];
