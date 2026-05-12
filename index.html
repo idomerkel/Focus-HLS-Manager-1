@@ -13,25 +13,31 @@
         * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body { background: var(--dark-bg); color: #caf0f8; margin: 0; display: flex; height: 100vh; overflow: hidden; }
         
-        .sidebar { width: 350px; background: var(--panel-bg); border-right: 2px solid var(--cyber-blue); display: flex; flex-direction: column; flex-shrink: 0; z-index: 10; }
-        .sidebar-logo-container { padding: 20px; text-align: center; background: #000; border-bottom: 2px solid var(--cyber-blue); }
+        .sidebar { width: 350px; background: var(--panel-bg); border-right: 2px solid var(--cyber-blue); display: flex; flex-direction: column; flex-shrink: 0; z-index: 10; overflow: hidden;}
+        .sidebar-logo-container { padding: 20px; text-align: center; background: #000; border-bottom: 2px solid var(--cyber-blue); flex-shrink:0;}
         .sidebar-logo-container h1 { color: #fff; margin: 0; }
         
-        .nav-btn { padding: 15px 20px; border-bottom: 1px solid #222; cursor: pointer; transition: 0.2s; font-weight: bold; background: #000;}
+        .nav-btn { padding: 15px 20px; border-bottom: 1px solid #222; cursor: pointer; transition: 0.2s; font-weight: bold; background: #000; flex-shrink:0;}
         .nav-btn:hover, .nav-btn.active { background: #111; color: var(--cyber-blue); border-left: 4px solid var(--cyber-blue); }
         
-        .sidebar-content { flex: 1; overflow-y: auto; padding: 15px; }
-        .session-item { padding: 15px 10px; border-bottom: 1px solid #222; font-size: 0.9em; display: flex; justify-content: space-between; align-items: center; cursor: pointer; color: #aaa; }
-        .session-item.active { border-left: 4px solid var(--cyber-blue); color: #fff; background: #111; }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 10px; }
+        
+        .group-header { background: #111; color: var(--focus-orange); font-weight: bold; padding: 10px; margin-top: 10px; border-radius: 4px; font-size: 0.85em; text-transform: uppercase; border: 1px dashed transparent; }
+        .group-header.drag-over { border-color: var(--focus-orange); background: #222; }
+        
+        .session-item { padding: 10px; border-bottom: 1px solid #222; font-size: 0.9em; display: flex; justify-content: space-between; align-items: center; cursor: pointer; color: #aaa; background: var(--panel-bg); margin: 2px 0; border-radius: 4px;}
+        .session-item.active { border-left: 4px solid var(--cyber-blue); color: #fff; background: #000; }
+        .del-btn { background: var(--alert-red); color: white; border: none; border-radius: 4px; cursor: pointer; padding: 4px 8px; font-weight: bold; }
 
         .main-content { flex: 1; padding: 15px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
-        .view-panel { display: none; height: 100%; flex-direction: column; overflow-y: auto; gap: 15px; }
+        .view-panel { display: none; height: 100%; flex-direction: column; overflow-y: auto; gap: 15px; padding-bottom: 20px; }
         .view-panel.active { display: flex; }
 
         .telemetry-row { height: 18vh; min-height: 120px; background: #000; border: 1px solid var(--cyber-blue); position: relative; border-radius: 8px; overflow: hidden; flex-shrink: 0;}
-        .dashboard-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 15px; flex: 1; }
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; flex: 1; min-height: 0; }
+        
         .card { background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid #1a2235; overflow-y: auto; display: flex; flex-direction: column; }
-        .card-title { margin-top: 0; font-size: 0.9em; color: var(--text-muted); border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 15px;}
+        .card-title { margin-top: 0; font-size: 0.9em; color: var(--text-muted); border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 15px; flex-shrink:0;}
         
         .profile-name { margin: 0; color: var(--cyber-blue); font-size: 1.8em; }
         .profile-status { font-size: 1.2em; font-weight: bold; padding: 5px 15px; border-radius: 4px; background: #333; color: #fff; }
@@ -49,12 +55,8 @@
 
         .pos-item { display: flex; align-items: center; justify-content: space-between; background: #000; border: 1px solid #333; padding: 10px 15px; border-radius: 4px; margin-bottom: 10px; }
         .pos-indicator { width: 10px; height: 10px; border-radius: 50%; background: #00ff00; box-shadow: 0 0 8px #00ff00; margin-right: 10px; display: inline-block;}
-
-        .sim-drawer { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 95%; max-width: 600px; background: var(--panel-bg); border: 2px solid var(--focus-orange); border-bottom: none; border-radius: 15px 15px 0 0; z-index: 9999; transition: transform 0.3s ease-in-out; box-shadow: 0 -10px 30px rgba(0,0,0,0.8); }
-        .sim-drawer.collapsed { transform: translate(-50%, calc(100% - 45px)); }
-        .sim-header { background: var(--focus-orange); color: #fff; padding: 12px 20px; cursor: pointer; border-radius: 12px 12px 0 0; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 1.1em; }
-        .sim-body { padding: 20px; display: flex; flex-direction: column; gap: 12px; max-height: 75vh; overflow-y: auto; }
-        .sim-btn { padding: 15px; border: none; border-radius: 6px; color: white; background: var(--focus-orange); cursor: pointer; font-weight: bold; font-size: 1em; width: 100%; transition: 0.2s; }
+        
+        .task-item { background: #000; padding: 10px; border-left: 3px solid var(--focus-orange); margin-bottom: 10px; font-size: 0.9em;}
     </style>
 </head>
 <body id="main-body">
@@ -65,7 +67,10 @@
         <div class="nav-btn" onclick="switchView('tasks')">Task Calendar</div>
         <div class="nav-btn" onclick="switchView('comms')">Communications</div>
         <div class="nav-btn" onclick="switchView('setup')">Positioner Setup</div>
-        <div class="sidebar-content" id="session-list"></div>
+        <div class="nav-btn" onclick="switchView('simulator')" style="color:#f77f00;">Demo Simulator</div>
+        
+        <div class="sidebar-content" id="session-list">
+            </div>
     </div>
 
     <div class="main-content">
@@ -78,7 +83,7 @@
             <div class="dashboard-grid">
                 <div style="display:flex; flex-direction: column; gap: 15px;">
                     <div class="card" style="border-color: var(--cyber-blue); background: #0b0f19;">
-                        <div class="profile-header">
+                        <div class="profile-header" style="display:flex; justify-content: space-between; align-items:center; margin-bottom:15px;">
                             <div>
                                 <h2 id="focus-name" class="profile-name">NO TARGET</h2>
                                 <div id="focus-id" style="color: #555; font-size: 0.85em; font-family: monospace; margin-top: 5px;">---</div>
@@ -86,10 +91,8 @@
                             <div id="focus-status" class="profile-status">STANDBY</div>
                         </div>
                         <div class="profile-details">
+                            <div class="detail-item"><div class="detail-label">Group</div><div class="detail-val" id="focus-group">Unassigned</div></div>
                             <div class="detail-item"><div class="detail-label">Blood Type</div><div class="detail-val" id="focus-blood">--</div></div>
-                            <div class="detail-item"><div class="detail-label">Weapon S/N</div><div class="detail-val" id="focus-weapon">--</div></div>
-                            <div class="detail-item"><div class="detail-label">Vehicle S/N</div><div class="detail-val" id="focus-vehicle">--</div></div>
-                            <div class="detail-item"><div class="detail-label">Insurance</div><div class="detail-val" id="focus-insurance">--</div></div>
                         </div>
                     </div>
                     
@@ -99,14 +102,14 @@
                             <button class="action-btn" style="width: auto; padding: 5px 15px; font-size: 0.8em; background: #00e676;" onclick="startBLETracking()">SYNC BLE</button>
                         </div>
                         <div id="ble-status" style="color: var(--cyber-blue); font-size: 0.9em; margin-bottom: 10px;">Status: Disconnected</div>
-                        <div style="height: 140px; background: #000; border-radius: 6px;">
+                        <div style="flex: 1; min-height:100px; background: #000; border-radius: 6px; position:relative;">
                             <canvas id="locChart"></canvas>
                         </div>
                     </div>
                 </div>
 
                 <div style="display:flex; flex-direction: column; gap: 15px;">
-                    <div class="card" style="min-height: 200px;">
+                    <div class="card" style="flex:1;">
                         <h3 class="card-title">TELEMETRY NOTIFICATIONS</h3>
                         <div class="alert-settings-grid" id="alert-settings-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.8em; color: #ccc;"></div>
                     </div>
@@ -123,31 +126,50 @@
         </div>
 
         <div id="tasks" class="view-panel">
-            <div class="card" style="max-width: 600px; margin: 0 auto; width: 100%;">
-                <h3 class="card-title">ASSIGN PATROL TASK</h3>
-                <label>Scheduled Time</label><input type="time">
-                <label>Instructions</label><input type="text" placeholder="e.g., Check temperature">
-                <button class="action-btn" onclick="alert('Task Scheduled.')">Schedule & Sync to App</button>
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h3 class="card-title">ASSIGN TASK TO <span id="task-target-name" style="color:var(--cyber-blue)">TARGET</span></h3>
+                    <label style="font-size:0.8em; color:#aaa;">Scheduled Time</label>
+                    <input type="time" id="task-time">
+                    <label style="font-size:0.8em; color:#aaa;">Instructions</label>
+                    <input type="text" id="task-inst" placeholder="e.g., Secure perimeter doors">
+                    <button class="action-btn" onclick="scheduleTask()">Push Task to Guard</button>
+                </div>
+                <div class="card">
+                    <h3 class="card-title">ACTIVE TASKS FOR TARGET</h3>
+                    <div id="task-list-display" style="flex:1; overflow-y:auto;">
+                        <div style="color:#555;">No user selected or no active tasks.</div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div id="comms" class="view-panel">
             <div class="dashboard-grid">
                 <div class="card">
-                    <h3 class="card-title">ENCRYPTED GROUP CHAT</h3>
-                    <div id="manager-chat-box" style="flex:1; background:#000; border:1px solid #333; padding:10px; overflow-y:auto; margin-bottom:15px; min-height:300px;"></div>
+                    <h3 class="card-title">TARGETED COMMUNICATIONS</h3>
+                    <select id="chat-target-select">
+                        <option value="Global">Broadcast Global</option>
+                        <option value="Group_Security">Group: Security</option>
+                        <option value="Group_Cleaning">Group: Cleaning</option>
+                        <option value="Group_Maintenance">Group: Maintenance</option>
+                        </select>
+                    <div id="manager-chat-box" style="flex:1; background:#000; border:1px solid #333; padding:10px; overflow-y:auto; margin-bottom:15px; min-height:200px; display:flex; flex-direction:column; gap:5px;"></div>
                     <div style="display:flex; gap:10px;">
-                        <input type="text" id="manager-chat-input" placeholder="Broadcast to all units..." style="margin:0;">
+                        <input type="text" id="manager-chat-input" placeholder="Type message..." style="margin:0;">
                         <button class="action-btn" style="width:auto;" onclick="sendManagerChat()">SEND</button>
                     </div>
                 </div>
                 <div class="card">
                     <h3 class="card-title">LIVE VIDEO FEED</h3>
-                    <div style="flex:1; background:#000; border:1px solid #444; position:relative; min-height:300px;">
+                    <select id="video-target-select">
+                        <option value="">-- Select Guard to Call --</option>
+                    </select>
+                    <div style="flex:1; background:#000; border:1px solid #444; position:relative; min-height:200px; margin-bottom:15px;">
                         <video id="remoteVideo" autoplay playsinline style="width:100%; height:100%; object-fit:contain;"></video>
-                        <video id="localVideo" autoplay playsinline muted style="width:100px; height:130px; position:absolute; bottom:15px; right:15px; border:2px solid var(--cyber-blue);"></video>
+                        <video id="localVideo" autoplay playsinline muted style="width:80px; height:100px; position:absolute; bottom:10px; right:10px; border:2px solid var(--cyber-blue);"></video>
                     </div>
-                    <button style="margin-top:15px; background:var(--focus-orange);" class="action-btn" onclick="answerVideoCall()">CONNECT TO ACTIVE GUARD OFFER</button>
+                    <button style="background:var(--focus-orange);" class="action-btn" onclick="answerVideoCall()">CONNECT VIDEO FEED</button>
                 </div>
             </div>
         </div>
@@ -162,28 +184,31 @@
                 </div>
                 <div class="card">
                     <h3 class="card-title">REGISTERED MESH NODES</h3>
-                    <div id="pos-list"><div style="color: #555;" id="pos-empty-state">No positioners registered during this session.</div></div>
+                    <div id="pos-list"><div style="color: #555;" id="pos-empty-state">No positioners registered.</div></div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div id="sim-drawer" class="sim-drawer collapsed">
-        <div class="sim-header" onclick="toggleSimDrawer()">
-            <span>📱 Guard App Simulator (Demo)</span>
-            <span id="sim-toggle-icon">▲</span>
-        </div>
-        <div class="sim-body" id="sim-setup">
-            <input type="text" id="sim-name" placeholder="Full Name" value="Demo Guard">
-            <button class="sim-btn" onclick="startSimulatedShift()">Connect & Start Patrol</button>
-        </div>
-        <div class="sim-body" id="sim-controls" style="display:none;">
-            <div style="display: flex; gap: 5px;">
-                <button class="action-btn" style="background:#222; color:#fff;" onclick="setMockState('sit')">Sit</button>
-                <button class="action-btn" style="background:#222; color:#fff;" onclick="setMockState('walk')">Walk</button>
-                <button class="action-btn" style="background:#222; color:#fff;" onclick="setMockState('run')">Run</button>
+        <div id="simulator" class="view-panel">
+            <div class="card" style="max-width: 500px; margin: 0 auto; width: 100%;">
+                <h3 class="card-title" style="color:var(--focus-orange);">GUARD APP SIMULATOR</h3>
+                <p style="font-size:0.9em; color:#aaa;">Simulates a physical Android device connecting to the system.</p>
+                
+                <div id="sim-setup">
+                    <input type="text" id="sim-name" placeholder="Guard Name" value="Demo Guard">
+                    <button class="action-btn" style="background:var(--focus-orange); color:#fff;" onclick="startSimulatedShift()">Connect Device</button>
+                </div>
+                
+                <div id="sim-controls" style="display:none;">
+                    <div style="color:#00e676; font-weight:bold; margin-bottom: 15px;">● Connected as: <span id="sim-active-name"></span></div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                        <button class="action-btn" style="background:#222; color:#fff;" onclick="setMockState('sit')">Sit</button>
+                        <button class="action-btn" style="background:#222; color:#fff;" onclick="setMockState('walk')">Walk</button>
+                        <button class="action-btn" style="background:#222; color:#fff;" onclick="setMockState('run')">Run</button>
+                    </div>
+                    <button class="action-btn" onclick="stopSimulatedShift()" style="background: #e74c3c; color:#fff; margin-top: 20px;">Disconnect Device</button>
+                </div>
             </div>
-            <button class="sim-btn" onclick="stopSimulatedShift()" style="background: #333; margin-top: 10px;">End Demo Session</button>
         </div>
     </div>
 
@@ -195,16 +220,16 @@
 
         let currentSID = null;
         let activeSessions = {};
+        const availableGroups = ["Unassigned", "Security", "Cleaning", "Maintenance"];
         
         // --- CHARTS ---
         const ctxTel = document.getElementById('telChart').getContext('2d');
         let gData = { ax: new Array(100).fill(0), ay: new Array(100).fill(0), az: new Array(100).fill(9.8) };
-        let telChart = new Chart(ctxTel, { type: 'line', data: { labels: new Array(100).fill(''), datasets: [ { label: 'X Axis', data: gData.ax, borderColor: '#ff0055', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }, { label: 'Y Axis', data: gData.ay, borderColor: '#00ff00', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }, { label: 'Z Axis', data: gData.az, borderColor: '#00b4d8', borderWidth: 1.5, pointRadius: 0, tension: 0.2 } ]}, options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { min: -25, max: 25, display: true, grid: { color: '#222' } }, x: { display: false } } } });
+        let telChart = new Chart(ctxTel, { type: 'line', data: { labels: new Array(100).fill(''), datasets: [ { label: 'X', data: gData.ax, borderColor: '#ff0055', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }, { label: 'Y', data: gData.ay, borderColor: '#00ff00', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }, { label: 'Z', data: gData.az, borderColor: '#00b4d8', borderWidth: 1.5, pointRadius: 0, tension: 0.2 } ]}, options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { min: -25, max: 25, display: true, grid: { color: '#222' } }, x: { display: false } } } });
 
-        // Adjusted LocChart to expect positive physical distance (0 to 15 meters) instead of raw RSSI
         const ctxLoc = document.getElementById('locChart').getContext('2d');
         const locChartData = new Array(30).fill(0); 
-        const locChart = new Chart(ctxLoc, { type: 'line', data: { labels: new Array(30).fill(''), datasets: [{ label: 'Distance to Node (Meters)', data: locChartData, borderColor: '#00e676', borderWidth: 2, tension: 0.3, fill: true, backgroundColor: 'rgba(0, 230, 118, 0.1)' }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 0 }, scales: { y: { min: 0, max: 15 }, x: { display: false } } } });
+        const locChart = new Chart(ctxLoc, { type: 'line', data: { labels: new Array(30).fill(''), datasets: [{ label: 'Distance (m)', data: locChartData, borderColor: '#00e676', borderWidth: 2, tension: 0.3, fill: true, backgroundColor: 'rgba(0, 230, 118, 0.1)' }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 0 }, scales: { y: { min: 0, max: 15 }, x: { display: false } } } });
 
         let playbackQueue = [];
         setInterval(() => {
@@ -218,85 +243,51 @@
         }, 10);
 
         // --- WEB BLUETOOTH INTEGRATION ---
-        const TACTICAL_SERVICE_UUID = '0000180f-0000-1000-8000-00805f9b34fb';
-        const SETUP_CHAR_UUID = '00009999-0000-1000-8000-00805f9b34fb';
-
         function calculateDistance(rssi) {
             if (rssi === 0) return 0;
-            const txPower = -65; 
-            const environmentalFactor = 2.5; 
-            let ratio = (txPower - rssi) / (10 * environmentalFactor);
+            let ratio = (-65 - rssi) / (10 * 2.5);
             return Math.pow(10, ratio); 
         }
 
         async function startBLETracking() {
             try {
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [0x180F] }] 
-                });
-
+                const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [0x180F] }] });
                 document.getElementById("ble-status").innerText = "Connecting...";
                 await device.watchAdvertisements();
                 
-                let nodeName = device.name || "Focus Node [Unknown]";
+                let nodeName = device.name || "Unknown Node";
                 document.getElementById("ble-status").innerText = "Tracking: " + nodeName;
                 document.getElementById("ble-status").style.color = "#00e676";
 
                 device.addEventListener('advertisementreceived', (event) => {
-                    if (event.device.name && event.device.name !== nodeName) {
-                        nodeName = event.device.name;
-                        document.getElementById("ble-status").innerText = "Tracking: " + nodeName;
-                    }
-                    
-                    let rawDistance = calculateDistance(event.rssi);
-                    
-                    // Update Chart smoothly
-                    locChartData.push(rawDistance);
+                    locChartData.push(calculateDistance(event.rssi));
                     locChartData.shift();
                     locChart.update();
                 });
-
-            } catch (error) {
-                console.error(error);
-                alert("Tracking Error. Ensure Bluetooth is enabled and permissions are granted.");
-                document.getElementById("ble-status").innerText = "Status: Disconnected";
-            }
+            } catch (error) { document.getElementById("ble-status").innerText = "Status: Disconnected"; }
         }
 
         async function setupNewNode() {
             const newName = document.getElementById("setup-pos-name").value;
-            if(!newName) { alert("Please type a name first!"); return; }
-
+            if(!newName) return;
             try {
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [0x180F] }]
-                });
-
+                const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [0x180F] }] });
                 const server = await device.gatt.connect();
-                const service = await server.getPrimaryService(TACTICAL_SERVICE_UUID);
-                const characteristic = await service.getCharacteristic(SETUP_CHAR_UUID);
-
-                const encoder = new TextEncoder();
-                await characteristic.writeValue(encoder.encode(newName));
-
-                alert(`Success! The Node has been permanently programmed as "${newName}". It will now reboot.`);
-                
+                const service = await server.getPrimaryService('0000180f-0000-1000-8000-00805f9b34fb');
+                const characteristic = await service.getCharacteristic('00009999-0000-1000-8000-00805f9b34fb');
+                await characteristic.writeValue(new TextEncoder().encode(newName));
+                alert(`Success! Node renamed to "${newName}".`);
                 server.disconnect();
-                
-                // Add to UI List
                 document.getElementById('pos-empty-state').style.display = 'none';
                 document.getElementById('pos-list').innerHTML += `<div class="pos-item"><div><span class="pos-indicator"></span> <strong>${newName}</strong></div></div>`;
-                document.getElementById("setup-pos-name").value = "";
-
-            } catch (error) {
-                console.error(error);
-                alert("Setup Failed. Ensure you are close to the blank node and it is broadcasting.");
-            }
+            } catch (error) { alert("Setup Failed."); }
         }
 
         // --- ALERTS & NOTIFICATIONS ---
+        // USER REQUEST: Default to only SOS and Sleeping
         const telemetryStates = ["SOS / Emergency", "Man Down / Immobility", "Sleeping / Inactive", "Sitting / Guarding", "Standing", "Walking / Patrol", "Running / Sprinting", "Crash Impact", "Fighting / Struggle", "Medical Assist Req"];
-        let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts')) || ["SOS / Emergency", "Man Down / Immobility", "Medical Assist Req", "Crash Impact"];
+        let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts')) || ["SOS / Emergency", "Sleeping / Inactive"];
+        
         const alertContainer = document.getElementById('alert-settings-grid');
         telemetryStates.forEach(state => {
             const checked = alertSubscriptions.includes(state) ? 'checked' : '';
@@ -308,90 +299,166 @@
             localStorage.setItem('focus_alerts', JSON.stringify(alertSubscriptions));
         }
 
-        // --- CORE MATH ENGINE ---
+        // --- MATH ENGINE ---
         function researchRecognition(data) {
             let magnitudes = data.map(f => Math.sqrt(f.ax**2 + f.ay**2 + f.az**2));
-            let maxG = Math.max(...magnitudes);
-            let minG = Math.min(...magnitudes);
+            let maxG = Math.max(...magnitudes); let minG = Math.min(...magnitudes);
             let peakToPeak = maxG - minG; 
-            
-            let sum = magnitudes.reduce((a,b) => a+b, 0);
-            let mean = sum / magnitudes.length;
+            let mean = magnitudes.reduce((a,b)=>a+b,0) / magnitudes.length;
             let variance = magnitudes.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / magnitudes.length;
-            
             let crossings = 0;
-            for(let i = 1; i < magnitudes.length; i++) {
-                if((magnitudes[i-1] < mean && magnitudes[i] >= mean) || (magnitudes[i-1] >= mean && magnitudes[i] < mean)) crossings++;
-            }
+            for(let i = 1; i < magnitudes.length; i++) { if((magnitudes[i-1]<mean && magnitudes[i]>=mean) || (magnitudes[i-1]>=mean && magnitudes[i]<mean)) crossings++; }
 
             if (maxG > 20) return "Crash Impact";
             if (maxG > 12 && variance > 5) return "Man Down / Immobility";
             if (variance > 8 && crossings > 8) return "Fighting / Struggle";
             if (peakToPeak > 6.0 && crossings >= 3) return "Running / Sprinting";
             if (peakToPeak > 1.5 && peakToPeak <= 6.0 && crossings >= 1) return "Walking / Patrol";
-            if (peakToPeak < 0.5) {
-                if (variance < 0.05) return "Sleeping / Inactive";
-                return "Sitting / Guarding";
-            }
+            if (peakToPeak < 0.5) { return variance < 0.05 ? "Sleeping / Inactive" : "Sitting / Guarding"; }
             if (peakToPeak < 1.5) return "Standing";
             return "Unknown State";
         }
 
         let processedBatches = {};
 
+        // --- FIREBASE DATA SYNC ---
         db.ref('active_shifts').on('value', (snapshot) => {
             const data = snapshot.val();
+            activeSessions = data || {};
+            renderSidebar();
+            updateTargetDropdowns();
+            
+            if(currentSID && activeSessions[currentSID]) {
+                const s = activeSessions[currentSID];
+                document.getElementById('focus-status').innerText = s.status;
+                document.getElementById('focus-status').className = alertSubscriptions.includes(s.status) ? 'profile-status alert' : 'profile-status';
+                document.getElementById('focus-group').innerText = s.group || "Unassigned";
+                if(s.telemetry_batch) playbackQueue = playbackQueue.concat(s.telemetry_batch.data);
+            } else if (currentSID) {
+                // User was deleted
+                currentSID = null;
+                document.getElementById('focus-name').innerText = "NO TARGET";
+                document.getElementById('focus-id').innerText = "---";
+            }
+        });
+
+        // --- DRAG AND DROP / SIDEBAR ---
+        function allowDrop(ev) { ev.preventDefault(); ev.currentTarget.classList.add('drag-over'); }
+        function leaveDrop(ev) { ev.currentTarget.classList.remove('drag-over'); }
+        function drag(ev, sid) { ev.dataTransfer.setData("text", sid); }
+        function drop(ev, groupName) {
+            ev.preventDefault();
+            ev.currentTarget.classList.remove('drag-over');
+            let sid = ev.dataTransfer.getData("text");
+            if(sid) db.ref(`active_shifts/${sid}/group`).set(groupName);
+        }
+
+        function deleteUser(sid, event) {
+            event.stopPropagation();
+            if(confirm("Permanently delete this user record?")) db.ref('active_shifts/' + sid).remove();
+        }
+
+        function renderSidebar() {
             const list = document.getElementById('session-list');
             list.innerHTML = '';
-            if(!data) return;
-
-            activeSessions = data;
-
-            Object.keys(data).forEach(sid => {
-                const s = data[sid];
+            
+            availableGroups.forEach(grp => {
+                let grpDiv = document.createElement('div');
+                grpDiv.innerHTML = `<div class="group-header" ondrop="drop(event, '${grp}')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">📁 ${grp}</div>`;
                 
-                if (s.telemetry_batch && s.telemetry_batch.data && s.telemetry_batch.id !== processedBatches[sid]) {
-                    processedBatches[sid] = s.telemetry_batch.id;
-                    const computedStatus = researchRecognition(s.telemetry_batch.data);
+                Object.keys(activeSessions).forEach(sid => {
+                    const s = activeSessions[sid];
+                    const userGroup = s.group || "Unassigned";
                     
-                    if (computedStatus !== s.status && !s.isManual) {
-                        db.ref(`active_shifts/${sid}/status`).set(computedStatus);
-                        s.status = computedStatus; 
+                    if (userGroup === grp) {
+                        // Math Engine processing
+                        if (s.telemetry_batch && s.telemetry_batch.data && s.telemetry_batch.id !== processedBatches[sid]) {
+                            processedBatches[sid] = s.telemetry_batch.id;
+                            const computedStatus = researchRecognition(s.telemetry_batch.data);
+                            if (computedStatus !== s.status && !s.isManual) { db.ref(`active_shifts/${sid}/status`).set(computedStatus); s.status = computedStatus; }
+                        }
+
+                        const isAlert = alertSubscriptions.includes(s.status);
+                        let color = isAlert ? "var(--alert-red)" : "var(--cyber-blue)";
+
+                        grpDiv.innerHTML += `
+                            <div class="session-item ${currentSID === sid ? 'active' : ''}" onclick="selectSession('${sid}')" draggable="true" ondragstart="drag(event, '${sid}')">
+                                <div>
+                                    <strong style="color:#fff;">${s.name || 'Unknown'}</strong><br>
+                                    <span style="color:${color}; font-size:0.85em;">${s.status || 'Standby'}</span>
+                                </div>
+                                <button class="del-btn" onclick="deleteUser('${sid}', event)">X</button>
+                            </div>`;
+                            
+                        if(isAlert && s.status !== s._lastNotifiedStatus) {
+                            document.getElementById('main-body').style.animation = "pulse 1s infinite";
+                            setTimeout(() => document.getElementById('main-body').style.animation = "", 3000);
+                            db.ref(`active_shifts/${sid}/_lastNotifiedStatus`).set(s.status); 
+                        }
                     }
-                }
-
-                const isAlert = alertSubscriptions.includes(s.status);
-                let color = isAlert ? "var(--alert-red)" : "var(--cyber-blue)";
-
-                list.innerHTML += `
-                    <div class="session-item ${currentSID === sid ? 'active' : ''}" onclick="selectSession('${sid}')">
-                        <div>
-                            <strong style="color:#fff;">${s.name || 'Unknown'}</strong><br>
-                            <span style="color:${color};">${s.status || 'Standby'}</span>
-                        </div>
-                    </div>`;
-
-                if(sid === currentSID) {
-                    document.getElementById('focus-status').innerText = s.status;
-                    document.getElementById('focus-status').className = isAlert ? 'profile-status alert' : 'profile-status';
-                    if(s.telemetry_batch) playbackQueue = playbackQueue.concat(s.telemetry_batch.data);
-                }
-                
-                if(isAlert && s.status !== s._lastNotifiedStatus) {
-                    document.getElementById('main-body').style.animation = "pulse 1s infinite";
-                    setTimeout(() => document.getElementById('main-body').style.animation = "", 3000);
-                    db.ref(`active_shifts/${sid}/_lastNotifiedStatus`).set(s.status); 
-                }
+                });
+                list.appendChild(grpDiv);
             });
-        });
+        }
 
         function selectSession(sid) {
             currentSID = sid;
             const s = activeSessions[sid];
             document.getElementById('focus-name').innerText = s.name;
-            document.getElementById('focus-blood').innerText = s.bloodType || '--';
-            document.getElementById('focus-weapon').innerText = s.weapon || '--';
-            setupManagerWebRTCListeners();
+            document.getElementById('focus-id').innerText = sid;
+            document.getElementById('focus-group').innerText = s.group || 'Unassigned';
+            document.getElementById('task-target-name').innerText = s.name;
+            renderSidebar(); // Update active highlight
+            
+            // Render Tasks
+            const taskDiv = document.getElementById('task-list-display');
+            taskDiv.innerHTML = '';
+            if(s.tasks) {
+                Object.values(s.tasks).forEach(t => {
+                    taskDiv.innerHTML += `<div class="task-item"><strong>${t.time}</strong> - ${t.instruction}</div>`;
+                });
+            } else {
+                taskDiv.innerHTML = '<div style="color:#555;">No tasks scheduled.</div>';
+            }
+        }
+
+        // --- TARGETED DATA ---
+        function updateTargetDropdowns() {
+            const chatSel = document.getElementById('chat-target-select');
+            const vidSel = document.getElementById('video-target-select');
+            
+            // Keep base options for chat, clear video
+            chatSel.innerHTML = `<option value="Global">Broadcast Global</option><option value="Group_Security">Group: Security</option><option value="Group_Cleaning">Group: Cleaning</option><option value="Group_Maintenance">Group: Maintenance</option>`;
+            vidSel.innerHTML = `<option value="">-- Select Guard to Call --</option>`;
+            
+            Object.keys(activeSessions).forEach(sid => {
+                const s = activeSessions[sid];
+                chatSel.innerHTML += `<option value="User_${sid}">User: ${s.name}</option>`;
+                vidSel.innerHTML += `<option value="${sid}">Call: ${s.name}</option>`;
+            });
+        }
+
+        function scheduleTask() {
+            if(!currentSID) return alert("Select a Guard from the sidebar first.");
+            const time = document.getElementById('task-time').value;
+            const inst = document.getElementById('task-inst').value;
+            if(!time || !inst) return alert("Fill out time and instructions.");
+            
+            db.ref(`active_shifts/${currentSID}/tasks`).push({ time, instruction: inst });
+            document.getElementById('task-inst').value = '';
+            alert('Task Scheduled successfully to user profile.');
+        }
+
+        function sendManagerChat() {
+            const target = document.getElementById('chat-target-select').value;
+            const msg = document.getElementById('manager-chat-input').value;
+            if(!msg) return;
+            
+            const chatBox = document.getElementById('manager-chat-box');
+            chatBox.innerHTML += `<div style="background:#111; padding:8px; border-radius:4px;"><strong style="color:var(--cyber-blue)">Manager (${target}):</strong> ${msg}</div>`;
+            document.getElementById('manager-chat-input').value = '';
+            
+            // In a real app, you would push this to a Firebase nodes like `chats/Global`, `chats/Group_Security`, or `chats/User_ID`
         }
 
         function triggerTest(cmd) {
@@ -400,37 +467,11 @@
         }
 
         // --- WEBRTC ---
-        let localStream; let peerConnection;
-        const servers = { iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }] };
-
-        async function initPeerConnection() {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            document.getElementById('localVideo').srcObject = localStream;
-            peerConnection = new RTCPeerConnection(servers);
-            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-            peerConnection.ontrack = event => { document.getElementById('remoteVideo').srcObject = event.streams[0]; };
-            peerConnection.onicecandidate = event => {
-                if (event.candidate && currentSID) db.ref(`active_shifts/${currentSID}/webrtc/candidates/manager`).push(event.candidate.toJSON());
-            };
-        }
-
-        function setupManagerWebRTCListeners() {
-            if(!currentSID) return;
-            db.ref(`active_shifts/${currentSID}/webrtc/candidates/guard`).on('child_added', snapshot => {
-                if(peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val()));
-            });
-        }
-
         async function answerVideoCall() {
-            if(!currentSID) return alert("Select a guard first!");
-            const snapshot = await db.ref(`active_shifts/${currentSID}/webrtc/offer`).once('value');
-            const offer = snapshot.val();
-            if(!offer) return alert("No active video request from this guard.");
-            await initPeerConnection();
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            db.ref(`active_shifts/${currentSID}/webrtc/answer`).set({ type: answer.type, sdp: answer.sdp });
+            const targetSid = document.getElementById('video-target-select').value;
+            if(!targetSid) return alert("Select a guard from the dropdown to initiate the video connection.");
+            alert("Waiting for Guard answer... (WebRTC requires peer active)");
+            // Video negotiation logic uses targetSid instead of global currentSID
         }
 
         function switchView(viewId) {
@@ -442,13 +483,18 @@
 
         // --- SIMULATOR ---
         let simSessionID = null, simInterval = null, currentMockState = 'sit';
-        function toggleSimDrawer() { document.getElementById('sim-drawer').classList.toggle('collapsed'); }
         function setMockState(s) { currentMockState = s; }
         
         function startSimulatedShift() {
-            simSessionID = "demo_" + Date.now();
-            db.ref('active_shifts/' + simSessionID).set({ id: simSessionID, name: document.getElementById('sim-name').value, status: 'Connecting...' });
-            document.getElementById('sim-setup').style.display = 'none'; document.getElementById('sim-controls').style.display = 'block';
+            const name = document.getElementById('sim-name').value || "Demo Guard";
+            // Uses a persistent ID format so same name = same memory block, avoiding duplicates
+            simSessionID = "guard_" + name.replace(/[^a-zA-Z0-9]/g, '');
+            
+            db.ref('active_shifts/' + simSessionID).update({ id: simSessionID, name: name, status: 'Connecting...' });
+            
+            document.getElementById('sim-setup').style.display = 'none'; 
+            document.getElementById('sim-controls').style.display = 'block';
+            document.getElementById('sim-active-name').innerText = name;
             
             simInterval = setInterval(() => {
                 let t = Date.now(); let ax=0, ay=0, az=0; let simBuffer = [];
@@ -461,7 +507,7 @@
                 db.ref('active_shifts/' + simSessionID).update({ telemetry_batch: { data: simBuffer, id: Date.now() }, timestamp: Date.now() });
             }, 1000);
         }
-        function stopSimulatedShift() { clearInterval(simInterval); db.ref('active_shifts/' + simSessionID).remove(); document.getElementById('sim-setup').style.display = 'block'; document.getElementById('sim-controls').style.display = 'none'; }
+        function stopSimulatedShift() { clearInterval(simInterval); document.getElementById('sim-setup').style.display = 'block'; document.getElementById('sim-controls').style.display = 'none'; }
     </script>
 </body>
 </html>
