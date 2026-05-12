@@ -36,7 +36,6 @@
         .telemetry-row { height: 18vh; min-height: 120px; background: #000; border: 1px solid var(--cyber-blue); position: relative; border-radius: 8px; overflow: hidden; flex-shrink: 0;}
         .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; flex: 1; min-height: 0; }
         
-        /* Responsive Breakpoint for laptops/tablets */
         @media (max-width: 900px) { .dashboard-grid { grid-template-columns: 1fr; } }
         
         .card { background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid #1a2235; overflow: visible; display: flex; flex-direction: column; }
@@ -65,14 +64,25 @@
         .legend-item { display: flex; align-items: center; background: #000; padding: 5px 10px; border-radius: 4px; border: 1px solid #333; }
         .legend-color { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
 
-        /* Global UI Elements */
         #node-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; }
         .modal-content { background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--cyber-blue); width: 350px; }
         
         #global-ring-alert { display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--alert-red); color: white; padding: 20px 40px; border-radius: 12px; z-index: 10000; font-size: 1.5em; font-weight: bold; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.8); animation: pulse 0.5s infinite alternate; }
+
+        /* MANAGER LOGIN OVERLAY */
+        #manager-login-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10000; display:flex; flex-direction:column; justify-content:center; align-items:center; }
     </style>
 </head>
 <body id="main-body">
+
+    <div id="manager-login-overlay">
+        <div style="text-align:center;">
+            <h1 style="color:var(--cyber-blue); letter-spacing: 2px;">FOCUS HLS COMMAND</h1>
+            <p style="color:#aaa;">Secure Authentication</p>
+            <input type="text" id="mgr-name-input" placeholder="Enter Commander Name" style="width:300px; text-align:center;">
+            <button onclick="loginManager()" style="width:300px; background:var(--focus-orange); color:#fff; font-weight:bold; padding:15px; border-radius:6px; border:none; cursor:pointer;">ACCESS DASHBOARD</button>
+        </div>
+    </div>
 
     <div id="global-ring-alert">
         🚨 INCOMING VIDEO CALL FROM GUARD 🚨<br>
@@ -191,6 +201,11 @@
                     <p style="font-size:0.9em; color:#aaa; margin-top:0;">Connect to a Blank Node to assign its permanent location name via Bluetooth GATT.</p>
                     <input type="text" id="setup-pos-name" placeholder="e.g., Server Room 1" value="Server Room 1">
                     <button class="action-btn" onclick="setupNewNode()" style="background: #3498db; color: #fff;">REGISTER & FLASH NODE</button>
+                    
+                    <h3 class="card-title" style="margin-top: 30px;">MANAGER BLE SCANNER</h3>
+                    <p style="font-size:0.9em; color:#aaa; margin-top:0;">Test nearby nodes from the Manager Tablet.</p>
+                    <button class="action-btn" style="background:#00e676; color:#000;" onclick="startManagerBLETracking()">START MANAGER SCAN</button>
+                    <div id="mgr-ble-status" style="margin-top: 10px; color: var(--cyber-blue); font-size: 0.9em;">Status: Idle</div>
                 </div>
                 <div class="card">
                     <h3 class="card-title">REGISTERED MESH NODES</h3>
@@ -236,9 +251,16 @@
 
     <script>
         // --- MANAGER LOGIN ---
-        let myManagerName = localStorage.getItem('focus_mgr_name');
-        if(!myManagerName) { myManagerName = prompt("Welcome Commander. Enter your Name:") || "HQ"; localStorage.setItem('focus_mgr_name', myManagerName); }
-        const managerId = "mgr_" + myManagerName.replace(/[^a-zA-Z0-9]/g, '');
+        let myManagerName = "HQ";
+        let managerId = "mgr_HQ";
+
+        function loginManager() {
+            let inputName = document.getElementById('mgr-name-input').value;
+            if(inputName) myManagerName = inputName;
+            managerId = "mgr_" + myManagerName.replace(/[^a-zA-Z0-9]/g, '');
+            document.getElementById('manager-login-overlay').style.display = 'none';
+            keepManagerAlive();
+        }
 
         // --- FIREBASE INIT ---
         const firebaseConfig = { apiKey: "AIzaSyAB2OJTPCyJaZ0BpE-FAEKdPW143VE3YDo", authDomain: "focushls-live.firebaseapp.com", projectId: "focushls-live", databaseURL: "https://focushls-live-default-rtdb.firebaseio.com" };
@@ -246,16 +268,16 @@
         const db = firebase.database();
 
         function keepManagerAlive() { db.ref('active_shifts/' + managerId).update({ id: managerId, name: myManagerName + " (HQ)", group: "Security", status: "Command Desk", role: "manager", timestamp: Date.now() }); }
-        keepManagerAlive(); setInterval(keepManagerAlive, 10000); window.addEventListener("beforeunload", () => db.ref('active_shifts/' + managerId).remove());
+        setInterval(keepManagerAlive, 10000); window.addEventListener("beforeunload", () => db.ref('active_shifts/' + managerId).remove());
 
         let currentSID = null; let activeSessions = {}; const availableGroups = ["Unassigned", "Security", "Cleaning", "Maintenance"];
         let nameCache = {}; let guardStateHistory = {}; let globalRegisteredNodes = []; 
-        let lastSessionKeys = ""; // For flicker prevention
+        let lastSessionKeys = "";
 
         // --- CHARTS ---
         const ctxTel = document.getElementById('telChart').getContext('2d');
         let gData = { ax: new Array(100).fill(0), ay: new Array(100).fill(0), az: new Array(100).fill(9.8) };
-        let telChart = new Chart(ctxTel, { type: 'line', data: { labels: new Array(100).fill(''), datasets: [ { label: 'X', data: gData.ax, borderColor: '#ff0055', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }, { label: 'Y', data: gData.ay, borderColor: '#00ff00', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }, { label: 'Z', data: gData.az, borderColor: '#00b4d8', borderWidth: 1.5, pointRadius: 0, tension: 0.2 } ]}, options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { min: -25, max: 25, display: true, grid: { color: '#222' } }, x: { display: false } } } });
+        let telChart = new Chart(ctxTel, { type: 'line', data: { labels: new Array(100).fill(''), datasets: [ { label: 'X Axis', data: gData.ax, borderColor: '#ff0055', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }, { label: 'Y Axis', data: gData.ay, borderColor: '#00ff00', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }, { label: 'Z Axis', data: gData.az, borderColor: '#00b4d8', borderWidth: 1.5, pointRadius: 0, tension: 0.2 } ]}, options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { min: -25, max: 25, display: true, grid: { color: '#222' } }, x: { display: false } } } });
 
         const ctxLoc = document.getElementById('locChart').getContext('2d');
         const nodeColors = ['#00e676', '#00b4d8', '#f77f00', '#d90429', '#9d4edd', '#e9c46a'];
@@ -271,7 +293,6 @@
             else { posList.innerHTML = '<div style="color: #555;">No positioners registered.</div>'; }
         });
 
-        // --- NODE ASSIGNMENT ---
         function openNodeModal() {
             if(!currentSID) return alert("Select a Target Guard from the sidebar first.");
             const selectEl = document.getElementById('modal-node-select'); selectEl.innerHTML = '';
@@ -294,7 +315,6 @@
                 let existingDataset = locChart.data.datasets.find(d => d.label === nodeName);
                 let dataArray = existingDataset ? existingDataset.data : new Array(30).fill(15);
                 
-                // Pull distance specifically streamed by the Guard
                 let newDist = (guardData.ble_distances && guardData.ble_distances[nodeName] !== undefined) ? guardData.ble_distances[nodeName] : 15;
                 dataArray.push(newDist); if(dataArray.length > 30) dataArray.shift();
                 
@@ -303,9 +323,22 @@
             document.getElementById('chart-legend').innerHTML = legendHTML; locChart.update();
         }
 
-        // --- OTA NODE SETUP ---
+        // --- OTA NODE SETUP & MANAGER BLE SCAN ---
         const TACTICAL_SERVICE_UUID = '0000180f-0000-1000-8000-00805f9b34fb';
         const SETUP_CHAR_UUID = '00009999-0000-1000-8000-00805f9b34fb';
+
+        async function startManagerBLETracking() {
+            try {
+                const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0x180F, TACTICAL_SERVICE_UUID] });
+                document.getElementById("mgr-ble-status").innerText = "Connecting to: " + device.name;
+                await device.watchAdvertisements();
+                device.addEventListener('advertisementreceived', (event) => {
+                    let nodeName = event.device.name || "Unknown ESP32";
+                    let distance = Math.pow(10, (-65 - event.rssi) / (10 * 2.5));
+                    document.getElementById("mgr-ble-status").innerHTML = `<span style="color:#00e676;">Tracking [${nodeName}] at ${distance.toFixed(1)} meters</span>`;
+                });
+            } catch (error) { document.getElementById("mgr-ble-status").innerText = "Manager Scan Cancelled/Failed."; }
+        }
 
         async function setupNewNode() {
             const newName = document.getElementById("setup-pos-name").value;
@@ -321,16 +354,21 @@
             } catch (error) { alert("Setup Failed: " + error.message); }
         }
 
-        // --- TELEMETRY NOTIFICATIONS (Default SOS Only) ---
+        // --- TELEMETRY NOTIFICATIONS (Default SOS Only Fixed) ---
         const telemetryStates = ["SOS / Emergency", "Man Down / Immobility", "Loud Noise / Alarm", "Sleeping / Inactive", "Sitting / Guarding", "Standing", "Walking / Patrol", "Running / Sprinting", "Crash Impact", "Fighting / Struggle", "Medical Assist Req"];
-        let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts')) || ["SOS / Emergency"];
+        
+        // Force new storage key so old cached data doesn't override SOS default
+        if (!localStorage.getItem('focus_alerts_v2')) { localStorage.setItem('focus_alerts_v2', JSON.stringify(["SOS / Emergency"])); }
+        let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts_v2'));
+        
         const alertContainer = document.getElementById('alert-settings-grid');
         telemetryStates.forEach(state => {
             const checked = alertSubscriptions.includes(state) ? 'checked' : '';
             alertContainer.innerHTML += `<label><input type="checkbox" value="${state}" ${checked} onchange="updateAlerts(this)"> ${state}</label>`;
         });
-        function updateAlerts(cb) { if(cb.checked) alertSubscriptions.push(cb.value); else alertSubscriptions = alertSubscriptions.filter(s => s !== cb.value); localStorage.setItem('focus_alerts', JSON.stringify(alertSubscriptions)); }
+        function updateAlerts(cb) { if(cb.checked) alertSubscriptions.push(cb.value); else alertSubscriptions = alertSubscriptions.filter(s => s !== cb.value); localStorage.setItem('focus_alerts_v2', JSON.stringify(alertSubscriptions)); }
 
+        // --- ANTI-FALSE "SLEEPING" MATH ENGINE ---
         function researchRecognition(data) {
             let magnitudes = data.map(f => Math.sqrt(f.ax**2 + f.ay**2 + f.az**2)); let maxG = Math.max(...magnitudes); let minG = Math.min(...magnitudes); let peakToPeak = maxG - minG; 
             let mean = magnitudes.reduce((a,b)=>a+b,0) / magnitudes.length; let variance = magnitudes.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / magnitudes.length;
@@ -366,34 +404,53 @@
             Object.keys(activeSessions).forEach(sid => {
                 let s = activeSessions[sid]; if (s.role === "manager") return;
                 
-                // Audio Status Overrides EVERYTHING immediately
-                let isLoudNoise = (s.audio_db && s.audio_db > 85);
-                let finalStatus = s.status;
-
                 if (s.telemetry_batch && s.telemetry_batch.data && s.telemetry_batch.id !== processedBatches[sid]) {
                     processedBatches[sid] = s.telemetry_batch.id; 
                     let rawStatus = researchRecognition(s.telemetry_batch.data);
                     
-                    if(!guardStateHistory[sid]) guardStateHistory[sid] = { recent: [], lastCrash: 0 };
+                    if(!guardStateHistory[sid]) guardStateHistory[sid] = { recent: [], lastCrash: 0, inactiveCount: 0 };
+                    
+                    // Audio Status overrides
+                    let isLoudNoise = (s.audio_db && s.audio_db > 85);
                     if(rawStatus === "Crash Impact") guardStateHistory[sid].lastCrash = Date.now();
+                    
+                    // Track Strict Inactivity for 30 Seconds rule
+                    if (rawStatus === "Sleeping / Inactive" || rawStatus === "Sitting / Guarding") {
+                        guardStateHistory[sid].inactiveCount++;
+                    } else {
+                        guardStateHistory[sid].inactiveCount = 0; // Reset completely if any movement is detected
+                    }
+
                     guardStateHistory[sid].recent.push(rawStatus); if(guardStateHistory[sid].recent.length > 5) guardStateHistory[sid].recent.shift();
 
+                    let finalStatus = rawStatus;
                     let timeSinceCrash = Date.now() - guardStateHistory[sid].lastCrash;
-                    let isInactive = (rawStatus === "Sleeping / Inactive" || rawStatus === "Sitting / Guarding" || rawStatus === "Standing");
-
-                    if (timeSinceCrash < 60000 && isInactive) finalStatus = "Man Down / Immobility";
-                    else if (["SOS / Emergency", "Crash Impact", "Fighting / Struggle"].includes(rawStatus)) finalStatus = rawStatus;
-                    else {
+                    
+                    if (isLoudNoise) {
+                        finalStatus = "Loud Noise / Alarm";
+                        guardStateHistory[sid].inactiveCount = 0;
+                    } else if (timeSinceCrash < 60000 && guardStateHistory[sid].inactiveCount > 0) {
+                        finalStatus = "Man Down / Immobility";
+                    } else if (["SOS / Emergency", "Crash Impact", "Fighting / Struggle"].includes(rawStatus)) {
+                        finalStatus = rawStatus;
+                    } else {
                         let counts = {}; guardStateHistory[sid].recent.forEach(st => counts[st] = (counts[st]||0) + 1);
                         let dominant = Object.keys(counts).reduce((a,b) => counts[a] > counts[b] ? a : b);
                         if (counts[dominant] >= 4) finalStatus = dominant; else finalStatus = s.status || "Standing";
                     }
+
+                    // STRICT SLEEPING OVERRIDE (Requires 30 seconds of inactivity)
+                    if (guardStateHistory[sid].inactiveCount > 30) {
+                        finalStatus = "Sleeping / Inactive";
+                    } else if (guardStateHistory[sid].inactiveCount > 5) {
+                        finalStatus = "Sitting / Guarding";
+                    } else if (finalStatus === "Sleeping / Inactive") {
+                        // If math said sleeping but 30 seconds haven't passed, downgrade to sitting
+                        finalStatus = "Sitting / Guarding";
+                    }
+
+                    if (finalStatus !== s.status && !s.isManual) { db.ref(`active_shifts/${sid}/status`).set(finalStatus); s.status = finalStatus; }
                 }
-
-                // If Audio is high, force the status regardless of accelerometer
-                if (isLoudNoise) finalStatus = "Loud Noise / Alarm";
-
-                if (finalStatus !== s.status && !s.isManual) { db.ref(`active_shifts/${sid}/status`).set(finalStatus); s.status = finalStatus; }
             });
 
             renderSidebar(); updateTargetDropdowns();
@@ -408,10 +465,13 @@
         });
 
         // --- GLOBAL VIDEO CALL LISTENER ---
-        db.ref(`active_shifts/${managerId}/webrtc/offer`).on('value', snap => {
-            const offer = snap.val();
-            if(offer && !peerConnection) document.getElementById('global-ring-alert').style.display = 'block';
-        });
+        // Ensure managerId is resolved before listening
+        setTimeout(() => {
+            db.ref(`active_shifts/${managerId}/webrtc/offer`).on('value', snap => {
+                const offer = snap.val();
+                if(offer && !peerConnection) document.getElementById('global-ring-alert').style.display = 'block';
+            });
+        }, 3000);
 
         function allowDrop(ev) { ev.preventDefault(); ev.currentTarget.classList.add('drag-over'); } function leaveDrop(ev) { ev.currentTarget.classList.remove('drag-over'); }
         function drag(ev, sid) { ev.dataTransfer.setData("text", sid); } function drop(ev, groupName) { ev.preventDefault(); ev.currentTarget.classList.remove('drag-over'); let sid = ev.dataTransfer.getData("text"); if(sid) db.ref(`active_shifts/${sid}/group`).set(groupName); }
@@ -444,11 +504,9 @@
             locChart.data.datasets = []; locChart.update();
         }
 
-        // --- FLICKER FIX FOR DROPDOWN ---
         function updateTargetDropdowns() {
             const chatSel = document.getElementById('chat-target-select'); const vidSel = document.getElementById('video-target-select');
             
-            // Build string of current user IDs to delta-check against last update
             let currentKeys = Object.keys(activeSessions).filter(sid => activeSessions[sid].role !== "manager").sort().join(',');
             if (currentKeys === lastSessionKeys && chatSel.options.length > 4) return; // No change, do not rebuild DOM!
             lastSessionKeys = currentKeys;
@@ -459,7 +517,6 @@
             vidSel.innerHTML = `<option value="">-- Select Guard to Call --</option>`;
             Object.keys(activeSessions).forEach(sid => { const s = activeSessions[sid]; if(s && s.role !== "manager") { chatSel.innerHTML += `<option value="User_${sid}">User: ${s.name}</option>`; vidSel.innerHTML += `<option value="${sid}">Call: ${s.name}</option>`; } });
             
-            // Re-select previously selected options
             if([...chatSel.options].some(o => o.value === currentChat)) chatSel.value = currentChat;
             if([...vidSel.options].some(o => o.value === currentVid)) vidSel.value = currentVid;
         }
