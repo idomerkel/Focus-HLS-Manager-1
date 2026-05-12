@@ -75,24 +75,18 @@
         <div class="nav-btn" onclick="switchView('comms')">Communications</div>
         <div class="nav-btn" onclick="switchView('setup')">Positioner Setup</div>
         <div class="nav-btn" onclick="switchView('simulator')" style="color:#f77f00;">Demo Simulator</div>
-        
         <div class="sidebar-content" id="session-list"></div>
     </div>
 
     <div class="main-content">
         <div id="dashboard" class="view-panel active">
-            <div class="telemetry-row">
-                <canvas id="telChart"></canvas>
-            </div>
+            <div class="telemetry-row"><canvas id="telChart"></canvas></div>
 
             <div class="dashboard-grid">
                 <div style="display:flex; flex-direction: column; gap: 15px;">
                     <div class="card" style="border-color: var(--cyber-blue); background: #0b0f19;">
                         <div class="profile-header" style="display:flex; justify-content: space-between; align-items:center; margin-bottom:15px;">
-                            <div>
-                                <h2 id="focus-name" class="profile-name">NO TARGET</h2>
-                                <div id="focus-id" style="color: #555; font-size: 0.85em; font-family: monospace; margin-top: 5px;">---</div>
-                            </div>
+                            <div><h2 id="focus-name" class="profile-name">NO TARGET</h2><div id="focus-id" style="color: #555; font-size: 0.85em; font-family: monospace; margin-top: 5px;">---</div></div>
                             <div id="focus-status" class="profile-status">STANDBY</div>
                         </div>
                         <div class="profile-details">
@@ -104,10 +98,10 @@
                     
                     <div class="card" style="flex:1;">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px;">
-                            <h3 class="card-title" style="border:none; margin:0; padding:0;">GUARD BLE DISTANCES</h3>
+                            <h3 class="card-title" style="border:none; margin:0; padding:0;">GUARD TO NODE DISTANCES</h3>
                             <button class="action-btn" style="width: auto; padding: 5px 15px; font-size: 0.8em; background: #00e676;" onclick="openNodeModal()">ASSIGN NODE</button>
                         </div>
-                        <div id="ble-status" style="color: var(--cyber-blue); font-size: 0.9em; margin-bottom: 10px;">Manager BT Status: Ready</div>
+                        <p style="font-size:0.8em; color:#888; margin-top:0;">Distances physically measured and streamed by the Guard's device.</p>
                         <div style="flex: 1; min-height:100px; background: #000; border-radius: 6px; position:relative; padding: 5px;">
                             <canvas id="locChart"></canvas>
                         </div>
@@ -136,17 +130,13 @@
             <div class="dashboard-grid">
                 <div class="card">
                     <h3 class="card-title">ASSIGN TASK TO <span id="task-target-name" style="color:var(--cyber-blue)">TARGET</span></h3>
-                    <label style="font-size:0.8em; color:#aaa;">Scheduled Time</label>
-                    <input type="time" id="task-time">
-                    <label style="font-size:0.8em; color:#aaa;">Instructions</label>
-                    <input type="text" id="task-inst" placeholder="e.g., Secure perimeter doors">
+                    <label style="font-size:0.8em; color:#aaa;">Scheduled Time</label><input type="time" id="task-time">
+                    <label style="font-size:0.8em; color:#aaa;">Instructions</label><input type="text" id="task-inst" placeholder="e.g., Secure perimeter doors">
                     <button class="action-btn" onclick="scheduleTask()">Push Task to Guard</button>
                 </div>
                 <div class="card">
                     <h3 class="card-title">ACTIVE TASKS FOR TARGET</h3>
-                    <div id="task-list-display" style="flex:1; overflow-y:auto;">
-                        <div style="color:#555;">No user selected or no active tasks.</div>
-                    </div>
+                    <div id="task-list-display" style="flex:1; overflow-y:auto;"><div style="color:#555;">No user selected or no active tasks.</div></div>
                 </div>
             </div>
         </div>
@@ -169,14 +159,15 @@
                 </div>
                 <div class="card">
                     <h3 class="card-title">LIVE VIDEO FEED</h3>
-                    <select id="video-target-select">
-                        <option value="">-- Select Guard to Call --</option>
-                    </select>
+                    <select id="video-target-select"><option value="">-- Select Guard to Call --</option></select>
                     <div style="flex:1; background:#000; border:1px solid #444; position:relative; min-height:200px; margin-bottom:15px;">
                         <video id="remoteVideo" autoplay playsinline style="width:100%; height:100%; object-fit:contain;"></video>
                         <video id="localVideo" autoplay playsinline muted style="width:80px; height:100px; position:absolute; bottom:10px; right:10px; border:2px solid var(--cyber-blue);"></video>
                     </div>
-                    <button style="background:var(--focus-orange);" class="action-btn" onclick="answerVideoCall()">CONNECT VIDEO FEED</button>
+                    <div style="display:flex; gap:10px;">
+                        <button style="background:var(--task-green);" class="action-btn" onclick="startManagerVideoCall()">CALL GUARD</button>
+                        <button style="background:var(--alert-red);" class="action-btn" onclick="hangUp()">END CALL</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -232,12 +223,9 @@
     </div>
 
     <script>
-        // --- MANAGER LOGIN & PRESENCE ---
+        // --- MANAGER LOGIN ---
         let myManagerName = localStorage.getItem('focus_mgr_name');
-        if(!myManagerName) {
-            myManagerName = prompt("Welcome Commander. Enter your Name:") || "HQ";
-            localStorage.setItem('focus_mgr_name', myManagerName);
-        }
+        if(!myManagerName) { myManagerName = prompt("Welcome Commander. Enter your Name:") || "HQ"; localStorage.setItem('focus_mgr_name', myManagerName); }
         const managerId = "mgr_" + myManagerName.replace(/[^a-zA-Z0-9]/g, '');
 
         // --- FIREBASE INIT ---
@@ -245,21 +233,11 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // Keep Manager Alive in the User List
-        function keepManagerAlive() {
-            db.ref('active_shifts/' + managerId).update({ id: managerId, name: myManagerName + " (HQ)", group: "Security", status: "Command Desk", role: "manager", timestamp: Date.now() });
-        }
-        keepManagerAlive();
-        setInterval(keepManagerAlive, 10000);
-        window.addEventListener("beforeunload", () => db.ref('active_shifts/' + managerId).remove());
+        function keepManagerAlive() { db.ref('active_shifts/' + managerId).update({ id: managerId, name: myManagerName + " (HQ)", group: "Security", status: "Command Desk", role: "manager", timestamp: Date.now() }); }
+        keepManagerAlive(); setInterval(keepManagerAlive, 10000); window.addEventListener("beforeunload", () => db.ref('active_shifts/' + managerId).remove());
 
-        let currentSID = null;
-        let activeSessions = {};
-        const availableGroups = ["Unassigned", "Security", "Cleaning", "Maintenance"];
-        
-        let nameCache = {};
-        let guardStateHistory = {}; 
-        let globalRegisteredNodes = []; 
+        let currentSID = null; let activeSessions = {}; const availableGroups = ["Unassigned", "Security", "Cleaning", "Maintenance"];
+        let nameCache = {}; let guardStateHistory = {}; let globalRegisteredNodes = []; 
 
         // --- CHARTS ---
         const ctxTel = document.getElementById('telChart').getContext('2d');
@@ -270,51 +248,30 @@
         const nodeColors = ['#00e676', '#00b4d8', '#f77f00', '#d90429', '#9d4edd', '#e9c46a'];
         let locChart = new Chart(ctxLoc, { type: 'line', data: { labels: new Array(30).fill(''), datasets: [] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 0 }, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 15, grid: { color: '#222' } }, x: { display: false } } } });
 
+        setInterval(() => { if(playbackQueue.length > 0) { const f = playbackQueue.shift(); gData.ax.push(f.ax); gData.ax.shift(); gData.ay.push(f.ay); gData.ay.shift(); gData.az.push(f.az); gData.az.shift(); telChart.update(); } }, 10);
         let playbackQueue = [];
-        setInterval(() => {
-            if(playbackQueue.length > 0) {
-                const f = playbackQueue.shift();
-                gData.ax.push(f.ax); gData.ax.shift();
-                gData.ay.push(f.ay); gData.ay.shift();
-                gData.az.push(f.az); gData.az.shift();
-                telChart.update();
-            }
-        }, 10);
 
-        // --- GLOBAL REGISTERED NODES LISTENER ---
+        // --- GLOBAL REGISTERED NODES ---
         db.ref('registered_nodes').on('value', (snapshot) => {
-            globalRegisteredNodes = [];
-            const posList = document.getElementById('pos-list');
-            const data = snapshot.val();
-            if(data) {
-                posList.innerHTML = '';
-                Object.keys(data).forEach(nodeName => {
-                    globalRegisteredNodes.push(nodeName);
-                    posList.innerHTML += `<div class="pos-item"><div><span class="pos-indicator"></span> <strong>${nodeName}</strong></div></div>`;
-                });
-            } else {
-                posList.innerHTML = '<div style="color: #555;">No positioners registered.</div>';
-            }
+            globalRegisteredNodes = []; const posList = document.getElementById('pos-list'); const data = snapshot.val();
+            if(data) { posList.innerHTML = ''; Object.keys(data).forEach(nodeName => { globalRegisteredNodes.push(nodeName); posList.innerHTML += `<div class="pos-item"><div><span class="pos-indicator"></span> <strong>${nodeName}</strong></div></div>`; }); } 
+            else { posList.innerHTML = '<div style="color: #555;">No positioners registered.</div>'; }
         });
 
-        // --- NEW DROPDOWN ASSIGNMENT LOGIC ---
+        // --- NODE ASSIGNMENT ---
         function openNodeModal() {
             if(!currentSID) return alert("Select a Target Guard from the sidebar first.");
-            const selectEl = document.getElementById('modal-node-select');
-            selectEl.innerHTML = '';
-            if(globalRegisteredNodes.length === 0) selectEl.innerHTML = '<option value="">No nodes available (Setup one first)</option>';
+            const selectEl = document.getElementById('modal-node-select'); selectEl.innerHTML = '';
+            if(globalRegisteredNodes.length === 0) selectEl.innerHTML = '<option value="">No nodes available</option>';
             else globalRegisteredNodes.forEach(n => selectEl.innerHTML += `<option value="${n}">${n}</option>`);
             document.getElementById('node-modal').style.display = 'flex';
         }
-
         function confirmNodeAssignment() {
             const selectedNode = document.getElementById('modal-node-select').value;
-            if(selectedNode && currentSID) {
-                db.ref(`active_shifts/${currentSID}/assigned_nodes/${selectedNode}`).set(true);
-                document.getElementById('node-modal').style.display = 'none';
-            }
+            if(selectedNode && currentSID) { db.ref(`active_shifts/${currentSID}/assigned_nodes/${selectedNode}`).set(true); document.getElementById('node-modal').style.display = 'none'; }
         }
 
+        // --- CHART: Plots GUARD's Distance to Nodes ---
         function renderDistanceChart(guardData) {
             if(!guardData.assigned_nodes) { locChart.data.datasets = []; locChart.update(); document.getElementById('chart-legend').innerHTML = '<span style="color:#555;">No nodes assigned.</span>'; return; }
             let legendHTML = ''; let assignedKeys = Object.keys(guardData.assigned_nodes);
@@ -323,61 +280,35 @@
                 legendHTML += `<div class="legend-item"><div class="legend-color" style="background:${color};"></div>${nodeName}</div>`;
                 let existingDataset = locChart.data.datasets.find(d => d.label === nodeName);
                 let dataArray = existingDataset ? existingDataset.data : new Array(30).fill(15);
+                
+                // Pull distance specific to this node streamed by the Guard
                 let newDist = (guardData.ble_distances && guardData.ble_distances[nodeName] !== undefined) ? guardData.ble_distances[nodeName] : 15;
                 dataArray.push(newDist); if(dataArray.length > 30) dataArray.shift();
+                
                 return { label: nodeName, data: dataArray, borderColor: color, borderWidth: 2, tension: 0.3, fill: false };
             });
             document.getElementById('chart-legend').innerHTML = legendHTML; locChart.update();
         }
 
-        // --- WEB BLUETOOTH INTEGRATION ---
+        // --- OTA NODE SETUP ---
         const TACTICAL_SERVICE_UUID = '0000180f-0000-1000-8000-00805f9b34fb';
         const SETUP_CHAR_UUID = '00009999-0000-1000-8000-00805f9b34fb';
-
-        function calculateDistance(rssi) {
-            if (rssi === 0) return 0;
-            let ratio = (-65 - rssi) / (10 * 2.5); return Math.pow(10, ratio); 
-        }
-
-        async function startBLETracking() {
-            try {
-                const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0x180F, TACTICAL_SERVICE_UUID] });
-                document.getElementById("ble-status").innerText = "Connecting...";
-                await device.watchAdvertisements();
-                let nodeName = device.name || "Focus Node [Unknown]";
-                
-                document.getElementById("ble-status").innerText = "Manager BT Tracking: " + nodeName;
-                document.getElementById("ble-status").style.color = "#00e676";
-
-                device.addEventListener('advertisementreceived', (event) => {
-                    if (event.device.name && event.device.name !== nodeName) {
-                        nodeName = event.device.name; document.getElementById("ble-status").innerText = "Manager BT Tracking: " + nodeName;
-                    }
-                    // Optional: Manager tracking its own raw distance independent of Guard
-                });
-            } catch (error) { document.getElementById("ble-status").innerText = "Status: Disconnected"; }
-        }
 
         async function setupNewNode() {
             const newName = document.getElementById("setup-pos-name").value;
             if(!newName) return;
             try {
                 const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0x180F, TACTICAL_SERVICE_UUID] });
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService(TACTICAL_SERVICE_UUID);
+                const server = await device.gatt.connect(); const service = await server.getPrimaryService(TACTICAL_SERVICE_UUID);
                 const characteristic = await service.getCharacteristic(SETUP_CHAR_UUID);
-                
-                try { await characteristic.writeValue(new TextEncoder().encode(newName)); } catch (writeErr) { console.log("Write completed. ESP32 rebooted."); }
-                
+                try { await characteristic.writeValue(new TextEncoder().encode(newName)); } catch (e) { /* Expected disconnect on ESP reboot */ }
                 alert(`Success! Node flashed as "${newName}".`);
                 if (server.connected) server.disconnect();
-                
-                db.ref(`registered_nodes/${newName}`).set({ name: newName, timestamp: Date.now() });
-                document.getElementById("setup-pos-name").value = "";
+                db.ref(`registered_nodes/${newName}`).set({ name: newName, timestamp: Date.now() }); document.getElementById("setup-pos-name").value = "";
             } catch (error) { alert("Setup Failed: " + error.message); }
         }
 
-        // --- DEFAULT ALERTS CHANGED TO SOS ONLY ---
+        // --- TELEMETRY NOTIFICATIONS ---
         const telemetryStates = ["SOS / Emergency", "Man Down / Immobility", "Loud Noise / Alarm", "Sleeping / Inactive", "Sitting / Guarding", "Standing", "Walking / Patrol", "Running / Sprinting", "Crash Impact", "Fighting / Struggle", "Medical Assist Req"];
         let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts')) || ["SOS / Emergency"];
         const alertContainer = document.getElementById('alert-settings-grid');
@@ -385,39 +316,25 @@
             const checked = alertSubscriptions.includes(state) ? 'checked' : '';
             alertContainer.innerHTML += `<label><input type="checkbox" value="${state}" ${checked} onchange="updateAlerts(this)"> ${state}</label>`;
         });
-        function updateAlerts(cb) {
-            if(cb.checked) alertSubscriptions.push(cb.value); else alertSubscriptions = alertSubscriptions.filter(s => s !== cb.value);
-            localStorage.setItem('focus_alerts', JSON.stringify(alertSubscriptions));
-        }
+        function updateAlerts(cb) { if(cb.checked) alertSubscriptions.push(cb.value); else alertSubscriptions = alertSubscriptions.filter(s => s !== cb.value); localStorage.setItem('focus_alerts', JSON.stringify(alertSubscriptions)); }
 
         function researchRecognition(data) {
-            let magnitudes = data.map(f => Math.sqrt(f.ax**2 + f.ay**2 + f.az**2));
-            let maxG = Math.max(...magnitudes); let minG = Math.min(...magnitudes); let peakToPeak = maxG - minG; 
-            let mean = magnitudes.reduce((a,b)=>a+b,0) / magnitudes.length;
-            let variance = magnitudes.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / magnitudes.length;
-            let crossings = 0;
-            for(let i = 1; i < magnitudes.length; i++) { if((magnitudes[i-1]<mean && magnitudes[i]>=mean) || (magnitudes[i-1]>=mean && magnitudes[i]<mean)) crossings++; }
+            let magnitudes = data.map(f => Math.sqrt(f.ax**2 + f.ay**2 + f.az**2)); let maxG = Math.max(...magnitudes); let minG = Math.min(...magnitudes); let peakToPeak = maxG - minG; 
+            let mean = magnitudes.reduce((a,b)=>a+b,0) / magnitudes.length; let variance = magnitudes.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / magnitudes.length;
+            let crossings = 0; for(let i = 1; i < magnitudes.length; i++) { if((magnitudes[i-1]<mean && magnitudes[i]>=mean) || (magnitudes[i-1]>=mean && magnitudes[i]<mean)) crossings++; }
 
-            if (maxG > 20) return "Crash Impact";
-            if (maxG > 12 && variance > 5) return "Man Down / Immobility";
-            if (variance > 8 && crossings > 8) return "Fighting / Struggle";
-            if (peakToPeak > 6.0 && crossings >= 3) return "Running / Sprinting";
-            if (peakToPeak > 1.5 && peakToPeak <= 6.0 && crossings >= 1) return "Walking / Patrol";
-            if (peakToPeak < 0.5) { return variance < 0.05 ? "Sleeping / Inactive" : "Sitting / Guarding"; }
-            if (peakToPeak < 1.5) return "Standing";
-            return "Unknown State";
+            if (maxG > 20) return "Crash Impact"; if (maxG > 12 && variance > 5) return "Man Down / Immobility"; if (variance > 8 && crossings > 8) return "Fighting / Struggle";
+            if (peakToPeak > 6.0 && crossings >= 3) return "Running / Sprinting"; if (peakToPeak > 1.5 && peakToPeak <= 6.0 && crossings >= 1) return "Walking / Patrol";
+            if (peakToPeak < 0.5) return variance < 0.05 ? "Sleeping / Inactive" : "Sitting / Guarding"; return "Standing";
         }
 
         let processedBatches = {};
 
+        // --- CORE DATABASE SYNC ---
         db.ref('active_shifts').on('value', (snapshot) => {
-            let data = snapshot.val() || {};
-            let seenNames = {};
-            
+            let data = snapshot.val() || {}; let seenNames = {};
             for(let sid in data) {
-                if(data[sid].name) nameCache[sid] = data[sid].name; 
-                else if (nameCache[sid]) { data[sid].name = nameCache[sid]; db.ref(`active_shifts/${sid}/name`).set(nameCache[sid]); }
-                
+                if(data[sid].name) nameCache[sid] = data[sid].name; else if (nameCache[sid]) { data[sid].name = nameCache[sid]; db.ref(`active_shifts/${sid}/name`).set(nameCache[sid]); }
                 let sName = data[sid].name;
                 if(sName && data[sid].role !== "manager") {
                     if(!seenNames[sName]) seenNames[sName] = sid; 
@@ -430,27 +347,18 @@
             }
 
             activeSessions = data;
-            
             Object.keys(activeSessions).forEach(sid => {
-                let s = activeSessions[sid];
-                if (s.role === "manager") return; // Skip math engine for Managers
-
+                let s = activeSessions[sid]; if (s.role === "manager") return;
                 if (s.telemetry_batch && s.telemetry_batch.data && s.telemetry_batch.id !== processedBatches[sid]) {
-                    processedBatches[sid] = s.telemetry_batch.id;
-                    let rawStatus = researchRecognition(s.telemetry_batch.data);
-                    
+                    processedBatches[sid] = s.telemetry_batch.id; let rawStatus = researchRecognition(s.telemetry_batch.data);
                     if(!guardStateHistory[sid]) guardStateHistory[sid] = { recent: [], lastCrash: 0 };
-                    let isLoudNoise = (s.audio_db && s.audio_db > 85);
                     if(rawStatus === "Crash Impact") guardStateHistory[sid].lastCrash = Date.now();
-                    
-                    guardStateHistory[sid].recent.push(rawStatus);
-                    if(guardStateHistory[sid].recent.length > 5) guardStateHistory[sid].recent.shift();
+                    guardStateHistory[sid].recent.push(rawStatus); if(guardStateHistory[sid].recent.length > 5) guardStateHistory[sid].recent.shift();
 
-                    let finalStatus = rawStatus;
-                    let timeSinceCrash = Date.now() - guardStateHistory[sid].lastCrash;
+                    let finalStatus = rawStatus; let timeSinceCrash = Date.now() - guardStateHistory[sid].lastCrash;
                     let isInactive = (rawStatus === "Sleeping / Inactive" || rawStatus === "Sitting / Guarding" || rawStatus === "Standing");
 
-                    if (isLoudNoise) finalStatus = "Loud Noise / Alarm";
+                    if (s.audio_db && s.audio_db > 85) finalStatus = "Loud Noise / Alarm";
                     else if (timeSinceCrash < 60000 && isInactive) finalStatus = "Man Down / Immobility";
                     else if (["SOS / Emergency", "Crash Impact", "Fighting / Struggle"].includes(rawStatus)) finalStatus = rawStatus;
                     else {
@@ -458,116 +366,78 @@
                         let dominant = Object.keys(counts).reduce((a,b) => counts[a] > counts[b] ? a : b);
                         if (counts[dominant] >= 4) finalStatus = dominant; else finalStatus = s.status || "Standing";
                     }
-
                     if (finalStatus !== s.status && !s.isManual) { db.ref(`active_shifts/${sid}/status`).set(finalStatus); s.status = finalStatus; }
                 }
             });
 
-            renderSidebar();
-            updateTargetDropdowns();
-            
+            renderSidebar(); updateTargetDropdowns();
             if(currentSID && activeSessions[currentSID]) {
                 const s = activeSessions[currentSID];
-                document.getElementById('focus-status').innerText = s.status;
-                document.getElementById('focus-status').className = alertSubscriptions.includes(s.status) ? 'profile-status alert' : 'profile-status';
+                document.getElementById('focus-status').innerText = s.status; document.getElementById('focus-status').className = alertSubscriptions.includes(s.status) ? 'profile-status alert' : 'profile-status';
                 document.getElementById('focus-group').innerText = s.group || "Unassigned";
-                
-                let audioUI = document.getElementById('focus-mic');
-                audioUI.innerText = (s.audio_db ? Math.round(s.audio_db) : "--") + " dB";
-                audioUI.style.color = (s.audio_db && s.audio_db > 85) ? "var(--alert-red)" : "#fff";
-
+                let audioUI = document.getElementById('focus-mic'); audioUI.innerText = (s.audio_db ? Math.round(s.audio_db) : "--") + " dB"; audioUI.style.color = (s.audio_db && s.audio_db > 85) ? "var(--alert-red)" : "#fff";
                 if(s.telemetry_batch) playbackQueue = playbackQueue.concat(s.telemetry_batch.data);
                 renderDistanceChart(s);
-            } else if (currentSID) {
-                currentSID = null; document.getElementById('focus-name').innerText = "NO TARGET"; document.getElementById('focus-id').innerText = "---";
-            }
+            } else if (currentSID) { currentSID = null; document.getElementById('focus-name').innerText = "NO TARGET"; document.getElementById('focus-id').innerText = "---"; }
         });
 
-        function allowDrop(ev) { ev.preventDefault(); ev.currentTarget.classList.add('drag-over'); }
-        function leaveDrop(ev) { ev.currentTarget.classList.remove('drag-over'); }
-        function drag(ev, sid) { ev.dataTransfer.setData("text", sid); }
-        function drop(ev, groupName) {
-            ev.preventDefault(); ev.currentTarget.classList.remove('drag-over');
-            let sid = ev.dataTransfer.getData("text");
-            if(sid) db.ref(`active_shifts/${sid}/group`).set(groupName);
-        }
-        function deleteUser(sid, event) { event.stopPropagation(); if(confirm("Permanently delete this user record?")) db.ref('active_shifts/' + sid).remove(); }
+        // --- UI RENDERERS ---
+        function allowDrop(ev) { ev.preventDefault(); ev.currentTarget.classList.add('drag-over'); } function leaveDrop(ev) { ev.currentTarget.classList.remove('drag-over'); }
+        function drag(ev, sid) { ev.dataTransfer.setData("text", sid); } function drop(ev, groupName) { ev.preventDefault(); ev.currentTarget.classList.remove('drag-over'); let sid = ev.dataTransfer.getData("text"); if(sid) db.ref(`active_shifts/${sid}/group`).set(groupName); }
+        function deleteUser(sid, event) { event.stopPropagation(); if(confirm("Permanently delete user?")) db.ref('active_shifts/' + sid).remove(); }
 
         function renderSidebar() {
             const list = document.getElementById('session-list'); list.innerHTML = '';
             availableGroups.forEach(grp => {
-                let grpDiv = document.createElement('div');
-                grpDiv.innerHTML = `<div class="group-header" ondrop="drop(event, '${grp}')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">📁 ${grp}</div>`;
+                let grpDiv = document.createElement('div'); grpDiv.innerHTML = `<div class="group-header" ondrop="drop(event, '${grp}')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">📁 ${grp}</div>`;
                 Object.keys(activeSessions).forEach(sid => {
                     const s = activeSessions[sid];
                     if ((s.group || "Unassigned") === grp) {
-                        const isAlert = alertSubscriptions.includes(s.status);
-                        let color = isAlert ? "var(--alert-red)" : (s.role === "manager" ? "#f77f00" : "var(--cyber-blue)");
-                        grpDiv.innerHTML += `
-                            <div class="session-item ${currentSID === sid ? 'active' : ''}" onclick="selectSession('${sid}')" draggable="true" ondragstart="drag(event, '${sid}')">
+                        const isAlert = alertSubscriptions.includes(s.status); let color = isAlert ? "var(--alert-red)" : (s.role === "manager" ? "#f77f00" : "var(--cyber-blue)");
+                        grpDiv.innerHTML += `<div class="session-item ${currentSID === sid ? 'active' : ''}" onclick="selectSession('${sid}')" draggable="true" ondragstart="drag(event, '${sid}')">
                                 <div><strong style="color:#fff;">${s.name || 'Unknown'}</strong><br><span style="color:${color}; font-size:0.85em;">${s.status || 'Standby'}</span></div>
-                                <button class="del-btn" onclick="deleteUser('${sid}', event)">X</button>
-                            </div>`;
-                        if(isAlert && s.status !== s._lastNotifiedStatus) {
-                            document.getElementById('main-body').style.animation = "pulse 1s infinite";
-                            setTimeout(() => document.getElementById('main-body').style.animation = "", 3000);
-                            db.ref(`active_shifts/${sid}/_lastNotifiedStatus`).set(s.status); 
-                        }
+                                <button class="del-btn" onclick="deleteUser('${sid}', event)">X</button></div>`;
+                        if(isAlert && s.status !== s._lastNotifiedStatus) { document.getElementById('main-body').style.animation = "pulse 1s infinite"; setTimeout(() => document.getElementById('main-body').style.animation = "", 3000); db.ref(`active_shifts/${sid}/_lastNotifiedStatus`).set(s.status); }
                     }
-                });
-                list.appendChild(grpDiv);
+                }); list.appendChild(grpDiv);
             });
         }
 
         function selectSession(sid) {
             currentSID = sid; const s = activeSessions[sid];
-            document.getElementById('focus-name').innerText = s.name; document.getElementById('focus-id').innerText = sid;
-            document.getElementById('focus-group').innerText = s.group || 'Unassigned'; document.getElementById('task-target-name').innerText = s.name;
+            document.getElementById('focus-name').innerText = s.name; document.getElementById('focus-id').innerText = sid; document.getElementById('focus-group').innerText = s.group || 'Unassigned'; document.getElementById('task-target-name').innerText = s.name;
             renderSidebar(); 
             const taskDiv = document.getElementById('task-list-display'); taskDiv.innerHTML = '';
-            if(s.tasks) Object.values(s.tasks).forEach(t => { taskDiv.innerHTML += `<div class="task-item"><strong>${t.time}</strong> - ${t.instruction}</div>`; });
-            else taskDiv.innerHTML = '<div style="color:#555;">No tasks scheduled.</div>';
+            if(s.tasks) Object.values(s.tasks).forEach(t => { taskDiv.innerHTML += `<div class="task-item"><strong>${t.time}</strong> - ${t.instruction}</div>`; }); else taskDiv.innerHTML = '<div style="color:#555;">No tasks scheduled.</div>';
             locChart.data.datasets = []; locChart.update();
         }
 
         function updateTargetDropdowns() {
             const chatSel = document.getElementById('chat-target-select'); const vidSel = document.getElementById('video-target-select');
-            
-            let expectedOptions = Object.keys(activeSessions).length + 4;
-            if (chatSel.options.length === expectedOptions) return;
-
+            let expectedOptions = Object.keys(activeSessions).length + 4; if (chatSel.options.length === expectedOptions) return; // Prevent Flicker
             let currentChat = chatSel.value; let currentVid = vidSel.value; 
-            
             chatSel.innerHTML = `<option value="Global">Broadcast Global</option><option value="Group_Security">Group: Security</option><option value="Group_Cleaning">Group: Cleaning</option><option value="Group_Maintenance">Group: Maintenance</option>`;
             vidSel.innerHTML = `<option value="">-- Select Guard to Call --</option>`;
-            Object.keys(activeSessions).forEach(sid => {
-                const s = activeSessions[sid];
-                if(s && s.role !== "manager") { chatSel.innerHTML += `<option value="User_${sid}">User: ${s.name}</option>`; vidSel.innerHTML += `<option value="${sid}">Call: ${s.name}</option>`; }
-            });
-            if([...chatSel.options].some(o => o.value === currentChat)) chatSel.value = currentChat;
-            if([...vidSel.options].some(o => o.value === currentVid)) vidSel.value = currentVid;
+            Object.keys(activeSessions).forEach(sid => { const s = activeSessions[sid]; if(s && s.role !== "manager") { chatSel.innerHTML += `<option value="User_${sid}">User: ${s.name}</option>`; vidSel.innerHTML += `<option value="${sid}">Call: ${s.name}</option>`; } });
+            if([...chatSel.options].some(o => o.value === currentChat)) chatSel.value = currentChat; if([...vidSel.options].some(o => o.value === currentVid)) vidSel.value = currentVid;
         }
 
+        // --- TASKS ---
         function scheduleTask() {
             if(!currentSID) return alert("Select a Guard from the sidebar first.");
             const time = document.getElementById('task-time').value; const inst = document.getElementById('task-inst').value;
             if(!time || !inst) return alert("Fill out time and instructions.");
-            
             const taskRef = db.ref(`active_shifts/${currentSID}/tasks`).push();
             taskRef.set({ id: taskRef.key, time: time, instruction: inst, status: "pending", timestamp: Date.now() });
             db.ref(`active_shifts/${currentSID}/new_task_trigger`).set(Date.now());
-            
             document.getElementById('task-inst').value = ''; alert('Task Scheduled and pushed to Guard.');
         }
 
-        // --- UPDATED CHAT TO USE MANAGER'S REAL NAME ---
+        // --- COMMS & WEBRTC (MANAGER INITIATES) ---
         function sendManagerChat() {
-            const target = document.getElementById('chat-target-select').value; const msg = document.getElementById('manager-chat-input').value;
-            if(!msg) return;
-            const chatBox = document.getElementById('manager-chat-box');
-            chatBox.innerHTML += `<div style="background:#111; padding:8px; border-radius:4px;"><strong style="color:var(--cyber-blue)">${myManagerName} (${target.replace('User_', '')}):</strong> ${msg}</div>`;
+            const target = document.getElementById('chat-target-select').value; const msg = document.getElementById('manager-chat-input').value; if(!msg) return;
+            const chatBox = document.getElementById('manager-chat-box'); chatBox.innerHTML += `<div style="background:#111; padding:8px; border-radius:4px;"><strong style="color:var(--cyber-blue)">${myManagerName} (${target.replace('User_', '')}):</strong> ${msg}</div>`;
             document.getElementById('manager-chat-input').value = '';
-            
             const payload = { sender: myManagerName, msg: msg, timestamp: Date.now() };
             if(target === 'Global') db.ref('chats/Global').push(payload);
             else if (target.startsWith('Group_')) db.ref(`chats/Groups/${target.replace('Group_', '')}`).push(payload);
@@ -575,26 +445,56 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        function triggerTest(cmd) { if(currentSID) db.ref(`active_shifts/${currentSID}`).update({ status: 'Standing', isManual: null }); }
-        function answerVideoCall() { alert("Waiting for Guard answer... (WebRTC requires peer active)"); }
+        let localStream; let peerConnection;
+        const servers = { iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }] };
 
-        function switchView(viewId) {
-            document.querySelectorAll('.view-panel').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById(viewId).classList.add('active'); event.target.classList.add('active');
+        async function initPeerConnection(targetSid, role) {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            document.getElementById('localVideo').srcObject = localStream;
+            peerConnection = new RTCPeerConnection(servers);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+            peerConnection.ontrack = event => { document.getElementById('remoteVideo').srcObject = event.streams[0]; };
+            peerConnection.onicecandidate = event => { if (event.candidate) db.ref(`active_shifts/${targetSid}/webrtc/candidates/${role}`).push(event.candidate.toJSON()); };
         }
 
-        // --- SIMULATOR ---
-        let simSessionID = null, simInterval = null, currentMockState = 'sit'; 
-        let simDistances = {};
+        async function startManagerVideoCall() {
+            const targetSid = document.getElementById('video-target-select').value;
+            if(!targetSid) return alert("Select a guard to call!");
+            currentSID = targetSid; 
+            
+            await initPeerConnection(targetSid, 'manager');
+            const offer = await peerConnection.createOffer(); await peerConnection.setLocalDescription(offer);
+            db.ref(`active_shifts/${targetSid}/webrtc/offer`).set({ type: offer.type, sdp: offer.sdp });
+            
+            db.ref(`active_shifts/${targetSid}/webrtc/answer`).on('value', snapshot => {
+                const answer = snapshot.val();
+                if(answer && peerConnection.currentRemoteDescription === null) peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            });
+            
+            db.ref(`active_shifts/${targetSid}/webrtc/candidates/guard`).on('child_added', snapshot => {
+                if(peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val()));
+            });
+            alert("Ringing Guard...");
+        }
+
+        function hangUp() {
+            if(peerConnection) peerConnection.close(); if(localStream) localStream.getTracks().forEach(track => track.stop());
+            peerConnection = null; if(currentSID) db.ref(`active_shifts/${currentSID}/webrtc`).remove();
+            document.getElementById('remoteVideo').srcObject = null; document.getElementById('localVideo').srcObject = null;
+        }
+
+        function triggerTest(cmd) { if(currentSID) db.ref(`active_shifts/${currentSID}`).update({ status: 'Standing', isManual: null }); }
+        function switchView(viewId) { document.querySelectorAll('.view-panel').forEach(v => v.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active')); document.getElementById(viewId).classList.add('active'); event.target.classList.add('active'); }
+
+        // --- SIMULATOR (Pulls dynamically assigned nodes for accurate distance charts) ---
+        let simSessionID = null, simInterval = null, currentMockState = 'sit'; let simDistances = {};
         function setMockState(s) { currentMockState = s; if(s === 'noise' && simSessionID) db.ref('active_shifts/' + simSessionID).update({ audio_db: 100 }); }
         
         function startSimulatedShift() {
             const name = document.getElementById('sim-name').value || "Demo Guard";
             simSessionID = "guard_" + name.replace(/[^a-zA-Z0-9]/g, ''); 
             db.ref('active_shifts/' + simSessionID).update({ id: simSessionID, name: name, status: 'Connecting...' });
-            document.getElementById('sim-setup').style.display = 'none'; document.getElementById('sim-controls').style.display = 'block';
-            document.getElementById('sim-active-name').innerText = name;
+            document.getElementById('sim-setup').style.display = 'none'; document.getElementById('sim-controls').style.display = 'block'; document.getElementById('sim-active-name').innerText = name;
             
             simInterval = setInterval(() => {
                 let t = Date.now(); let ax=0, ay=0, az=0; let simBuffer = []; let mockAudio = 40; 
@@ -615,7 +515,6 @@
                         simDistances[n] = Math.max(0, Math.min(15, simDistances[n])); distPayload[n] = simDistances[n];
                     });
                 }
-                
                 let finalAudio = (s && s.audio_db === 100 && currentMockState !== 'noise') ? 100 : mockAudio;
                 db.ref('active_shifts/' + simSessionID).update({ telemetry_batch: { data: simBuffer, id: Date.now() }, ble_distances: distPayload, audio_db: finalAudio, timestamp: Date.now() });
                 if(s && s.audio_db === 100) setTimeout(() => db.ref('active_shifts/' + simSessionID).update({ audio_db: 40 }), 3000); 
