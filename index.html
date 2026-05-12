@@ -90,7 +90,7 @@
         <h1 style="color:var(--cyber-blue); letter-spacing: 2px;">HQ CHECK-IN</h1>
         <p style="color:#aaa;">Enter your Commander Callsign to access the dashboard.</p>
         <input type="text" id="mgr-name-input" placeholder="e.g., Alpha-1" style="width:300px; text-align:center;">
-        <button onclick="loginManager()" style="width:300px; background:var(--focus-orange); color:#fff; font-weight:bold;">ACCESS DASHBOARD</button>
+        <button onclick="loginManager()" style="width:300px; background:var(--focus-orange); color:#fff; font-weight:bold; padding:15px; border-radius:6px; border:none; cursor:pointer;">ACCESS DASHBOARD</button>
     </div>
 
     <div id="global-ring-alert">
@@ -129,8 +129,9 @@
                     <div class="card" style="flex:1; min-height: 300px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px;">
                             <h3 class="card-title" style="border:none; margin:0; padding:0;">GUARD TO NODE DISTANCES</h3>
+                            <button class="action-btn" style="width: auto; padding: 5px 15px; font-size: 0.8em; background: #00e676;" onclick="openNodeModal()">ASSIGN NODE ALIAS</button>
                         </div>
-                        <p style="font-size:0.8em; color:#888; margin-top:0;">Distances physically measured and streamed by the Guard's device.</p>
+                        <p style="font-size:0.8em; color:#888; margin-top:0;">Resolves Android BLE Caching Bugs.</p>
                         <div style="flex: 1; min-height:150px; background: #000; border-radius: 6px; position:relative; padding: 5px;">
                             <canvas id="locChart"></canvas>
                         </div>
@@ -179,7 +180,12 @@
             <div class="dashboard-grid">
                 <div class="card" style="min-height: 400px;">
                     <h3 class="card-title">TARGETED COMMUNICATIONS</h3>
-                    <select id="chat-target-select"></select>
+                    <select id="chat-target-select">
+                        <option value="Global">Broadcast Global</option>
+                        <option value="Group_Security">Group: Security</option>
+                        <option value="Group_Cleaning">Group: Cleaning</option>
+                        <option value="Group_Maintenance">Group: Maintenance</option>
+                    </select>
                     <div id="manager-chat-box" style="flex:1; background:#000; border:1px solid #333; padding:10px; overflow-y:auto; margin-bottom:15px; display:flex; flex-direction:column; gap:5px; min-height: 200px;"></div>
                     <div style="display:flex; gap:10px;">
                         <input type="text" id="manager-chat-input" placeholder="Type message..." style="margin:0;">
@@ -224,8 +230,8 @@
 
         <div id="simulator" class="view-panel">
             <div class="card" style="max-width: 500px; margin: 0 auto; width: 100%;">
-                <h3 class="card-title" style="color:var(--focus-orange);">GUARD APP SIMULATOR</h3>
-                <p style="font-size:0.9em; color:#aaa;">Simulates a physical Android device connecting to the system.</p>
+                <h3 class="card-title" style="color:var(--focus-orange);">GUARD APP SIMULATOR (5 NODES)</h3>
+                <p style="font-size:0.9em; color:#aaa;">Simulates a physical Android device tracking 5 dynamic BLE nodes.</p>
                 <div id="sim-setup">
                     <input type="text" id="sim-name" placeholder="Guard Name" value="Demo Guard">
                     <button class="action-btn" style="background:var(--focus-orange); color:#fff;" onclick="startSimulatedShift()">Connect Device</button>
@@ -247,12 +253,17 @@
 
     <div id="node-modal">
         <div class="modal-content">
-            <h3 style="margin-top:0; color:var(--cyber-blue);">Assign Positioner Node</h3>
-            <p style="font-size: 0.85em; color: #888; margin-top: 0;">Select a registered node to assign to this guard.</p>
+            <h3 style="margin-top:0; color:var(--cyber-blue);">Assign Node Alias</h3>
+            <p style="font-size: 0.85em; color: #888; margin-top: 0;">Select a raw MAC/Name the Guard currently sees, and assign it a friendly room name.</p>
+            <label style="font-size:0.8em; color:var(--cyber-blue);">Raw Name Scanned by Guard:</label>
             <select id="modal-node-select" style="background:#111; border:1px solid #333; width:100%; color:#fff; padding:10px; margin-bottom:15px;"></select>
+            
+            <label style="font-size:0.8em; color:var(--cyber-blue);">Assign Friendly Name:</label>
+            <input type="text" id="modal-node-alias" placeholder="e.g., Server Room 1" style="background:#111; border:1px solid #333; width:100%; color:#fff; padding:10px; margin-bottom:15px;">
+            
             <div style="display:flex; gap:10px;">
                 <button class="action-btn" style="background:#333; color:#fff;" onclick="document.getElementById('node-modal').style.display='none'">Cancel</button>
-                <button class="action-btn" onclick="confirmNodeAssignment()">Assign to Target</button>
+                <button class="action-btn" onclick="confirmNodeAlias()">Save Alias</button>
             </div>
         </div>
     </div>
@@ -322,32 +333,55 @@
             else { posList.innerHTML = '<div style="color: #555;">No positioners registered.</div>'; }
         });
 
+        // --- NODE ALIAS SYSTEM (Bypasses Android Caching Bug) ---
         function openNodeModal() {
             if(!currentSID) return alert("Select a Target Guard from the sidebar first.");
+            const s = activeSessions[currentSID];
+            if(!s || !s.ble_distances || Object.keys(s.ble_distances).length === 0) {
+                return alert("Guard is not currently transmitting any BLE nodes. Ensure they have scanned the area.");
+            }
+            
             const selectEl = document.getElementById('modal-node-select'); selectEl.innerHTML = '';
-            if(globalRegisteredNodes.length === 0) selectEl.innerHTML = '<option value="">No nodes available</option>';
-            else globalRegisteredNodes.forEach(n => selectEl.innerHTML += `<option value="${n}">${n}</option>`);
+            Object.keys(s.ble_distances).forEach(n => {
+                selectEl.innerHTML += `<option value="${n}">${n}</option>`;
+            });
+            document.getElementById('modal-node-alias').value = "";
             document.getElementById('node-modal').style.display = 'flex';
         }
-        function confirmNodeAssignment() {
-            const selectedNode = document.getElementById('modal-node-select').value;
-            if(selectedNode && currentSID) { db.ref(`active_shifts/${currentSID}/assigned_nodes/${selectedNode}`).set(true); document.getElementById('node-modal').style.display = 'none'; }
+        
+        function confirmNodeAlias() {
+            const rawName = document.getElementById('modal-node-select').value;
+            const aliasName = document.getElementById('modal-node-alias').value;
+            if(rawName && aliasName && currentSID) { 
+                db.ref(`active_shifts/${currentSID}/node_aliases/${rawName}`).set(aliasName); 
+                document.getElementById('node-modal').style.display = 'none'; 
+            }
         }
 
-        // --- CHART: Plots GUARD's Distance to Nodes (Dynamic Keys to bypass MAC Cache) ---
+        // --- CHART: Plots GUARD's Distance using Aliases ---
         function renderDistanceChart(guardData) {
-            // Plot WHATEVER the guard sends in ble_distances, bypassing Manager's expectations
             if(!guardData.ble_distances) { locChart.data.datasets = []; locChart.update(); document.getElementById('chart-legend').innerHTML = '<span style="color:#555;">No node data streaming.</span>'; return; }
-            let legendHTML = ''; let activeNodes = Object.keys(guardData.ble_distances);
-            locChart.data.datasets = activeNodes.map((nodeName, index) => {
+            
+            let legendHTML = ''; 
+            let activeNodes = Object.keys(guardData.ble_distances);
+            
+            locChart.data.datasets = activeNodes.map((rawNodeName, index) => {
                 let color = nodeColors[index % nodeColors.length];
-                legendHTML += `<div class="legend-item"><div class="legend-color" style="background:${color};"></div>${nodeName}</div>`;
-                let existingDataset = locChart.data.datasets.find(d => d.label === nodeName);
+                // Use Alias if it exists, otherwise raw name
+                let displayName = (guardData.node_aliases && guardData.node_aliases[rawNodeName]) ? guardData.node_aliases[rawNodeName] : rawNodeName;
+                
+                legendHTML += `<div class="legend-item"><div class="legend-color" style="background:${color};"></div>${displayName}</div>`;
+                
+                let existingDataset = locChart.data.datasets.find(d => d.label === displayName);
                 let dataArray = existingDataset ? existingDataset.data : new Array(30).fill(15);
-                dataArray.push(guardData.ble_distances[nodeName]); if(dataArray.length > 30) dataArray.shift();
-                return { label: nodeName, data: dataArray, borderColor: color, borderWidth: 2, tension: 0.3, fill: false };
+                dataArray.push(guardData.ble_distances[rawNodeName]); 
+                if(dataArray.length > 30) dataArray.shift();
+                
+                return { label: displayName, data: dataArray, borderColor: color, borderWidth: 2, tension: 0.3, fill: false };
             });
-            document.getElementById('chart-legend').innerHTML = legendHTML; locChart.update();
+            
+            document.getElementById('chart-legend').innerHTML = legendHTML; 
+            locChart.update();
         }
 
         // --- OTA NODE SETUP & MANAGER BLE SCAN ---
@@ -374,7 +408,7 @@
                 const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0x180F, TACTICAL_SERVICE_UUID] });
                 const server = await device.gatt.connect(); const service = await server.getPrimaryService(TACTICAL_SERVICE_UUID);
                 const characteristic = await service.getCharacteristic(SETUP_CHAR_UUID);
-                try { await characteristic.writeValue(new TextEncoder().encode(newName)); } catch (e) { }
+                try { await characteristic.writeValue(new TextEncoder().encode(newName)); } catch (e) { /* Expected disconnect on ESP reboot */ }
                 alert(`Success! Node flashed as "${newName}".`);
                 if (server.connected) server.disconnect();
                 db.ref(`registered_nodes/${newName}`).set({ name: newName, timestamp: Date.now() }); document.getElementById("setup-pos-name").value = "";
@@ -384,16 +418,17 @@
         // --- TELEMETRY NOTIFICATIONS (Default SOS Only) ---
         const telemetryStates = ["SOS / Emergency", "Man Down / Immobility", "Loud Noise / Alarm", "Sleeping / Inactive", "Sitting / Guarding", "Standing", "Walking / Patrol", "Running / Sprinting", "Crash Impact", "Fighting / Struggle", "Medical Assist Req"];
         
-        if (!localStorage.getItem('focus_alerts_v3')) { localStorage.setItem('focus_alerts_v3', JSON.stringify(["SOS / Emergency"])); }
-        let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts_v3'));
+        if (!localStorage.getItem('focus_alerts_v4')) { localStorage.setItem('focus_alerts_v4', JSON.stringify(["SOS / Emergency"])); }
+        let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts_v4'));
         
         const alertContainer = document.getElementById('alert-settings-grid');
         telemetryStates.forEach(state => {
             const checked = alertSubscriptions.includes(state) ? 'checked' : '';
             alertContainer.innerHTML += `<label><input type="checkbox" value="${state}" ${checked} onchange="updateAlerts(this)"> ${state}</label>`;
         });
-        function updateAlerts(cb) { if(cb.checked) alertSubscriptions.push(cb.value); else alertSubscriptions = alertSubscriptions.filter(s => s !== cb.value); localStorage.setItem('focus_alerts_v3', JSON.stringify(alertSubscriptions)); }
+        function updateAlerts(cb) { if(cb.checked) alertSubscriptions.push(cb.value); else alertSubscriptions = alertSubscriptions.filter(s => s !== cb.value); localStorage.setItem('focus_alerts_v4', JSON.stringify(alertSubscriptions)); }
 
+        // --- ANTI-FALSE "SLEEPING" MATH ENGINE ---
         function researchRecognition(data) {
             let magnitudes = data.map(f => Math.sqrt(f.ax**2 + f.ay**2 + f.az**2)); let maxG = Math.max(...magnitudes); let minG = Math.min(...magnitudes); let peakToPeak = maxG - minG; 
             let mean = magnitudes.reduce((a,b)=>a+b,0) / magnitudes.length; let variance = magnitudes.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / magnitudes.length;
@@ -456,7 +491,7 @@
                         if (counts[dominant] >= 4) finalStatus = dominant; else finalStatus = s.status || "Standing";
                     }
 
-                    // Apply the Sleeping rule
+                    // Apply the Sleeping rule (Requires 30 seconds of pure inactivity)
                     if (guardStateHistory[sid].inactiveCount > 30) finalStatus = "Sleeping / Inactive";
                     else if (guardStateHistory[sid].inactiveCount > 5) finalStatus = "Sitting / Guarding";
                     else if (finalStatus === "Sleeping / Inactive") finalStatus = "Sitting / Guarding";
@@ -638,7 +673,7 @@
         function triggerTest(cmd) { if(currentSID) db.ref(`active_shifts/${currentSID}`).update({ status: 'Standing', isManual: null }); }
         function switchView(viewId) { document.querySelectorAll('.view-panel').forEach(v => v.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active')); document.getElementById(viewId).classList.add('active'); event.target.classList.add('active'); }
 
-        // --- SIMULATOR ---
+        // --- SIMULATOR (5 NODES) ---
         let simSessionID = null, simInterval = null, currentMockState = 'sit'; let simDistances = {};
         function setMockState(s) { currentMockState = s; if(s === 'noise' && simSessionID) db.ref('active_shifts/' + simSessionID).update({ audio_db: 100 }); }
         
@@ -648,6 +683,9 @@
             db.ref('active_shifts/' + simSessionID).update({ id: simSessionID, name: name, status: 'Connecting...' });
             document.getElementById('sim-setup').style.display = 'none'; document.getElementById('sim-controls').style.display = 'block'; document.getElementById('sim-active-name').innerText = name;
             
+            // 5 Unique Nodes for the Demo
+            let simNodes = { "Main Gate": { base: 12, range: 2 }, "Server Room 1": { base: 3, range: 1 }, "Lobby": { base: 8, range: 3 }, "Perimeter North": { base: 15, range: 0.5 }, "Garage": { base: 6, range: 2 } };
+
             simInterval = setInterval(() => {
                 let t = Date.now(); let ax=0, ay=0, az=0; let simBuffer = []; let mockAudio = 40; 
                 for(let i=0; i<10; i++) {
@@ -659,14 +697,15 @@
                     simBuffer.push({ax, ay, az});
                 }
                 
-                let distPayload = {}; let s = activeSessions[simSessionID];
-                if(s && s.assigned_nodes) {
-                    Object.keys(s.assigned_nodes).forEach(n => {
-                        if(!simDistances[n]) simDistances[n] = 10;
-                        if(currentMockState !== 'sit') simDistances[n] += (Math.random() - 0.5) * 2;
-                        simDistances[n] = Math.max(0, Math.min(15, simDistances[n])); distPayload[n] = simDistances[n];
-                    });
-                }
+                let distPayload = {}; 
+                Object.keys(simNodes).forEach(n => {
+                    if(!simDistances[n]) simDistances[n] = simNodes[n].base;
+                    if(currentMockState !== 'sit') simDistances[n] += (Math.random() - 0.5) * simNodes[n].range;
+                    simDistances[n] = Math.max(0, Math.min(15, simDistances[n])); 
+                    distPayload[n] = simDistances[n];
+                });
+
+                let s = activeSessions[simSessionID];
                 let finalAudio = (s && s.audio_db === 100 && currentMockState !== 'noise') ? 100 : mockAudio;
                 db.ref('active_shifts/' + simSessionID).update({ telemetry_batch: { data: simBuffer, id: Date.now() }, ble_distances: distPayload, audio_db: finalAudio, timestamp: Date.now() });
                 if(s && s.audio_db === 100) setTimeout(() => db.ref('active_shifts/' + simSessionID).update({ audio_db: 40 }), 3000); 
