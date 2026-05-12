@@ -61,6 +61,10 @@
         .legend-container { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; font-size: 0.8em; }
         .legend-item { display: flex; align-items: center; background: #000; padding: 5px 10px; border-radius: 4px; border: 1px solid #333; }
         .legend-color { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+
+        /* Modal Overlay for Assigning Nodes */
+        #node-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; }
+        .modal-content { background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--cyber-blue); width: 350px; }
     </style>
 </head>
 <body id="main-body">
@@ -103,8 +107,9 @@
                     <div class="card" style="flex:1;">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px;">
                             <h3 class="card-title" style="border:none; margin:0; padding:0;">GUARD BLE DISTANCES</h3>
-                            <button class="action-btn" style="width: auto; padding: 5px 15px; font-size: 0.8em; background: #00e676;" onclick="assignNodeToUser()">ASSIGN NODE</button>
+                            <button class="action-btn" style="width: auto; padding: 5px 15px; font-size: 0.8em; background: #00e676;" onclick="openNodeModal()">ASSIGN NODE</button>
                         </div>
+                        <div id="ble-status" style="color: var(--cyber-blue); font-size: 0.9em; margin-bottom: 10px;">Status: Disconnected</div>
                         <div style="flex: 1; min-height:100px; background: #000; border-radius: 6px; position:relative; padding: 5px;">
                             <canvas id="locChart"></canvas>
                         </div>
@@ -218,6 +223,18 @@
         </div>
     </div>
 
+    <div id="node-modal">
+        <div class="modal-content">
+            <h3 style="margin-top:0; color:var(--cyber-blue);">Assign Positioner Node</h3>
+            <p style="font-size: 0.85em; color: #888; margin-top: 0;">Select a registered node to assign to this guard.</p>
+            <select id="modal-node-select" style="background:#111; border:1px solid #333; width:100%; color:#fff; padding:10px; margin-bottom:15px;"></select>
+            <div style="display:flex; gap:10px;">
+                <button class="action-btn" style="background:#333; color:#fff;" onclick="document.getElementById('node-modal').style.display='none'">Cancel</button>
+                <button class="action-btn" onclick="confirmNodeAssignment()">Assign to Target</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // --- FIREBASE INIT ---
         const firebaseConfig = { apiKey: "AIzaSyAB2OJTPCyJaZ0BpE-FAEKdPW143VE3YDo", authDomain: "focushls-live.firebaseapp.com", projectId: "focushls-live", databaseURL: "https://focushls-live-default-rtdb.firebaseio.com" };
@@ -230,6 +247,7 @@
         
         let nameCache = {};
         let guardStateHistory = {}; 
+        let globalRegisteredNodes = []; // Stores node names fetched from Firebase
 
         // --- CHARTS ---
         const ctxTel = document.getElementById('telChart').getContext('2d');
@@ -251,11 +269,43 @@
             }
         }, 10);
 
-        function assignNodeToUser() {
-            if(!currentSID) return alert("Select a Target from the sidebar first.");
-            const nodeName = prompt("Enter Node Name (e.g., Server Room 1):");
-            if(!nodeName) return;
-            db.ref(`active_shifts/${currentSID}/assigned_nodes/${nodeName}`).set(true);
+        // --- GLOBAL REGISTERED NODES LISTENER ---
+        db.ref('registered_nodes').on('value', (snapshot) => {
+            globalRegisteredNodes = [];
+            const posList = document.getElementById('pos-list');
+            const data = snapshot.val();
+            
+            if(data) {
+                posList.innerHTML = '';
+                Object.keys(data).forEach(nodeName => {
+                    globalRegisteredNodes.push(nodeName);
+                    posList.innerHTML += `<div class="pos-item"><div><span class="pos-indicator"></span> <strong>${nodeName}</strong></div></div>`;
+                });
+            } else {
+                posList.innerHTML = '<div style="color: #555;">No positioners registered.</div>';
+            }
+        });
+
+        // --- NEW DROPDOWN ASSIGNMENT LOGIC ---
+        function openNodeModal() {
+            if(!currentSID) return alert("Select a Target Guard from the sidebar first.");
+            const selectEl = document.getElementById('modal-node-select');
+            selectEl.innerHTML = '';
+            
+            if(globalRegisteredNodes.length === 0) {
+                selectEl.innerHTML = '<option value="">No nodes available (Setup one first)</option>';
+            } else {
+                globalRegisteredNodes.forEach(n => selectEl.innerHTML += `<option value="${n}">${n}</option>`);
+            }
+            document.getElementById('node-modal').style.display = 'flex';
+        }
+
+        function confirmNodeAssignment() {
+            const selectedNode = document.getElementById('modal-node-select').value;
+            if(selectedNode && currentSID) {
+                db.ref(`active_shifts/${currentSID}/assigned_nodes/${selectedNode}`).set(true);
+                document.getElementById('node-modal').style.display = 'none';
+            }
         }
 
         function renderDistanceChart(guardData) {
@@ -273,7 +323,7 @@
             document.getElementById('chart-legend').innerHTML = legendHTML; locChart.update();
         }
 
-        // --- WEB BLUETOOTH INTEGRATION (Fixed for Tablets) ---
+        // --- WEB BLUETOOTH INTEGRATION ---
         const TACTICAL_SERVICE_UUID = '0000180f-0000-1000-8000-00805f9b34fb';
         const SETUP_CHAR_UUID = '00009999-0000-1000-8000-00805f9b34fb';
 
@@ -287,7 +337,7 @@
 
         async function startBLETracking() {
             try {
-                // acceptAllDevices bypasses strict Android UUID filters which often hide devices
+                // acceptAllDevices bypasses strict Android UUID filters which hide devices
                 const device = await navigator.bluetooth.requestDevice({
                     acceptAllDevices: true,
                     optionalServices: [0x180F, TACTICAL_SERVICE_UUID]
@@ -313,11 +363,12 @@
 
             } catch (error) {
                 console.error(error);
-                alert("Tracking Error. You may need to click 'Pair' when the popup appears.");
+                alert("Tracking Error. Ensure you click Pair in the popup.");
                 document.getElementById("ble-status").innerText = "Status: Disconnected";
             }
         }
 
+        // FIX: Handled the Disconnect exception gracefully and pushed to global registry
         async function setupNewNode() {
             const newName = document.getElementById("setup-pos-name").value;
             if(!newName) return;
@@ -329,12 +380,25 @@
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(TACTICAL_SERVICE_UUID);
                 const characteristic = await service.getCharacteristic(SETUP_CHAR_UUID);
-                await characteristic.writeValue(new TextEncoder().encode(newName));
-                alert(`Success! Node renamed to "${newName}".`);
-                server.disconnect();
-                document.getElementById('pos-empty-state').style.display = 'none';
-                document.getElementById('pos-list').innerHTML += `<div class="pos-item"><div><span class="pos-indicator"></span> <strong>${newName}</strong></div></div>`;
-            } catch (error) { alert("Setup Failed. Ensure node is broadcasting."); }
+                
+                try {
+                    await characteristic.writeValue(new TextEncoder().encode(newName));
+                } catch (writeErr) {
+                    // ESP32 reboots immediately upon receiving GATT signal. This causes a disconnect error. We handle it as a SUCCESS.
+                    console.log("Write completed. ESP32 rebooted.");
+                }
+                
+                alert(`Success! Node flashed as "${newName}". It is rebooting now.`);
+                if (server.connected) server.disconnect();
+                
+                // Add to Global Registry in Firebase
+                db.ref(`registered_nodes/${newName}`).set({ name: newName, timestamp: Date.now() });
+                document.getElementById("setup-pos-name").value = "";
+                
+            } catch (error) { 
+                console.error(error);
+                alert("Setup Failed: " + error.message); 
+            }
         }
 
         const telemetryStates = ["SOS / Emergency", "Man Down / Immobility", "Loud Noise / Alarm", "Sleeping / Inactive", "Sitting / Guarding", "Standing", "Walking / Patrol", "Running / Sprinting", "Crash Impact", "Fighting / Struggle", "Medical Assist Req"];
@@ -430,7 +494,7 @@
             });
 
             renderSidebar();
-            updateTargetDropdowns(); // Guaranteed not to flicker now
+            updateTargetDropdowns();
             
             if(currentSID && activeSessions[currentSID]) {
                 const s = activeSessions[currentSID];
@@ -449,7 +513,6 @@
             }
         });
 
-        // --- DRAG AND DROP / SIDEBAR ---
         function allowDrop(ev) { ev.preventDefault(); ev.currentTarget.classList.add('drag-over'); }
         function leaveDrop(ev) { ev.currentTarget.classList.remove('drag-over'); }
         function drag(ev, sid) { ev.dataTransfer.setData("text", sid); }
@@ -497,38 +560,31 @@
             locChart.data.datasets = []; locChart.update();
         }
 
-        // --- TARGETED DATA (Flicker Fix Applied Here) ---
         function updateTargetDropdowns() {
-            const chatSel = document.getElementById('chat-target-select'); 
-            const vidSel = document.getElementById('video-target-select');
+            const chatSel = document.getElementById('chat-target-select'); const vidSel = document.getElementById('video-target-select');
             
-            // Expected options = 4 default Chat Options + Number of active users
+            // FLICKER FIX: Only rebuild DOM if total active users has changed
             let expectedOptions = Object.keys(activeSessions).length + 4;
-            
-            // ONLY rewrite DOM if a user joined or left. This stops the flickering.
-            if (chatSel.options.length === expectedOptions) return; 
+            if (chatSel.options.length === expectedOptions) return;
 
             let currentChat = chatSel.value; let currentVid = vidSel.value; 
             
             chatSel.innerHTML = `<option value="Global">Broadcast Global</option><option value="Group_Security">Group: Security</option><option value="Group_Cleaning">Group: Cleaning</option><option value="Group_Maintenance">Group: Maintenance</option>`;
             vidSel.innerHTML = `<option value="">-- Select Guard to Call --</option>`;
-            
             Object.keys(activeSessions).forEach(sid => {
                 const s = activeSessions[sid];
                 if(s) { chatSel.innerHTML += `<option value="User_${sid}">User: ${s.name}</option>`; vidSel.innerHTML += `<option value="${sid}">Call: ${s.name}</option>`; }
             });
-            
             if([...chatSel.options].some(o => o.value === currentChat)) chatSel.value = currentChat;
             if([...vidSel.options].some(o => o.value === currentVid)) vidSel.value = currentVid;
         }
 
-        // --- TASKS FIX (Correct Push Structure for Android Apps) ---
+        // --- TASK FIX: Properly structures the Firebase push for Android List Adapters ---
         function scheduleTask() {
             if(!currentSID) return alert("Select a Guard from the sidebar first.");
             const time = document.getElementById('task-time').value; const inst = document.getElementById('task-inst').value;
             if(!time || !inst) return alert("Fill out time and instructions.");
             
-            // Properly generated ID and Timestamp for the Guard App listener
             const taskRef = db.ref(`active_shifts/${currentSID}/tasks`).push();
             taskRef.set({
                 id: taskRef.key,
@@ -538,7 +594,6 @@
                 timestamp: Date.now()
             });
             
-            // Triggers a root change so the Guard App catches it immediately
             db.ref(`active_shifts/${currentSID}/new_task_trigger`).set(Date.now());
             
             document.getElementById('task-inst').value = ''; 
