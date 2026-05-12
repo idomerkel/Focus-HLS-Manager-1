@@ -69,8 +69,7 @@
         <div class="nav-btn" onclick="switchView('setup')">Positioner Setup</div>
         <div class="nav-btn" onclick="switchView('simulator')" style="color:#f77f00;">Demo Simulator</div>
         
-        <div class="sidebar-content" id="session-list">
-            </div>
+        <div class="sidebar-content" id="session-list"></div>
     </div>
 
     <div class="main-content">
@@ -146,15 +145,15 @@
 
         <div id="comms" class="view-panel">
             <div class="dashboard-grid">
-                <div class="card">
+                <div class="card" style="min-height: 400px;">
                     <h3 class="card-title">TARGETED COMMUNICATIONS</h3>
                     <select id="chat-target-select">
                         <option value="Global">Broadcast Global</option>
                         <option value="Group_Security">Group: Security</option>
                         <option value="Group_Cleaning">Group: Cleaning</option>
                         <option value="Group_Maintenance">Group: Maintenance</option>
-                        </select>
-                    <div id="manager-chat-box" style="flex:1; background:#000; border:1px solid #333; padding:10px; overflow-y:auto; margin-bottom:15px; min-height:200px; display:flex; flex-direction:column; gap:5px;"></div>
+                    </select>
+                    <div id="manager-chat-box" style="flex:1; background:#000; border:1px solid #333; padding:10px; overflow-y:auto; margin-bottom:15px; display:flex; flex-direction:column; gap:5px;"></div>
                     <div style="display:flex; gap:10px;">
                         <input type="text" id="manager-chat-input" placeholder="Type message..." style="margin:0;">
                         <button class="action-btn" style="width:auto;" onclick="sendManagerChat()">SEND</button>
@@ -242,29 +241,49 @@
             }
         }, 10);
 
-        // --- WEB BLUETOOTH INTEGRATION ---
+        // --- WEB BLUETOOTH INTEGRATION (Fixed to match original working code) ---
         function calculateDistance(rssi) {
             if (rssi === 0) return 0;
-            let ratio = (-65 - rssi) / (10 * 2.5);
+            const txPower = -65;
+            const environmentalFactor = 2.5; 
+            let ratio = (txPower - rssi) / (10 * environmentalFactor);
             return Math.pow(10, ratio); 
         }
 
         async function startBLETracking() {
             try {
-                const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [0x180F] }] });
+                // Using the exact filters from your proven working block
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: [0x180F] }] 
+                });
+
                 document.getElementById("ble-status").innerText = "Connecting...";
-                await device.watchAdvertisements();
                 
-                let nodeName = device.name || "Unknown Node";
+                await device.watchAdvertisements();
+                let nodeName = device.name || "Focus Node [Unknown]";
+                
                 document.getElementById("ble-status").innerText = "Tracking: " + nodeName;
                 document.getElementById("ble-status").style.color = "#00e676";
 
+                // Listen for physical radio pings
                 device.addEventListener('advertisementreceived', (event) => {
-                    locChartData.push(calculateDistance(event.rssi));
+                    if (event.device.name && event.device.name !== nodeName) {
+                        nodeName = event.device.name;
+                        document.getElementById("ble-status").innerText = "Tracking: " + nodeName;
+                    }
+
+                    // Update Chart Live
+                    let rawDistance = calculateDistance(event.rssi);
+                    locChartData.push(rawDistance);
                     locChartData.shift();
                     locChart.update();
                 });
-            } catch (error) { document.getElementById("ble-status").innerText = "Status: Disconnected"; }
+
+            } catch (error) {
+                console.error(error);
+                alert("Tracking Error. Ensure Bluetooth is enabled on your Tablet and you accepted the prompt.");
+                document.getElementById("ble-status").innerText = "Status: Disconnected";
+            }
         }
 
         async function setupNewNode() {
@@ -284,7 +303,6 @@
         }
 
         // --- ALERTS & NOTIFICATIONS ---
-        // USER REQUEST: Default to only SOS and Sleeping
         const telemetryStates = ["SOS / Emergency", "Man Down / Immobility", "Sleeping / Inactive", "Sitting / Guarding", "Standing", "Walking / Patrol", "Running / Sprinting", "Crash Impact", "Fighting / Struggle", "Medical Assist Req"];
         let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts')) || ["SOS / Emergency", "Sleeping / Inactive"];
         
@@ -321,10 +339,35 @@
 
         let processedBatches = {};
 
-        // --- FIREBASE DATA SYNC ---
+        // --- FIREBASE DATA SYNC & AUTO-DEDUPLICATION ---
         db.ref('active_shifts').on('value', (snapshot) => {
-            const data = snapshot.val();
-            activeSessions = data || {};
+            let data = snapshot.val() || {};
+            
+            // 1. AUTO-DEDUPLICATION (Fixes cloned guards)
+            let seenNames = {};
+            for(let sid in data) {
+                let sName = data[sid].name;
+                if(sName) {
+                    if(!seenNames[sName]) {
+                        seenNames[sName] = sid; // Register first time seeing name
+                    } else {
+                        // Duplicate Found! Keep the one with the newest timestamp
+                        let existingSid = seenNames[sName];
+                        let existingTime = data[existingSid].timestamp || 0;
+                        let incomingTime = data[sid].timestamp || 0;
+                        
+                        if(incomingTime >= existingTime) {
+                            db.ref('active_shifts/' + existingSid).remove(); // Delete older clone from server
+                            seenNames[sName] = sid;
+                        } else {
+                            db.ref('active_shifts/' + sid).remove(); // Delete incoming weak clone
+                            delete data[sid]; // Remove from local UI immediately
+                        }
+                    }
+                }
+            }
+
+            activeSessions = data;
             renderSidebar();
             updateTargetDropdowns();
             
@@ -335,7 +378,6 @@
                 document.getElementById('focus-group').innerText = s.group || "Unassigned";
                 if(s.telemetry_batch) playbackQueue = playbackQueue.concat(s.telemetry_batch.data);
             } else if (currentSID) {
-                // User was deleted
                 currentSID = null;
                 document.getElementById('focus-name').innerText = "NO TARGET";
                 document.getElementById('focus-id').innerText = "---";
@@ -371,7 +413,6 @@
                     const userGroup = s.group || "Unassigned";
                     
                     if (userGroup === grp) {
-                        // Math Engine processing
                         if (s.telemetry_batch && s.telemetry_batch.data && s.telemetry_batch.id !== processedBatches[sid]) {
                             processedBatches[sid] = s.telemetry_batch.id;
                             const computedStatus = researchRecognition(s.telemetry_batch.data);
@@ -408,9 +449,8 @@
             document.getElementById('focus-id').innerText = sid;
             document.getElementById('focus-group').innerText = s.group || 'Unassigned';
             document.getElementById('task-target-name').innerText = s.name;
-            renderSidebar(); // Update active highlight
+            renderSidebar(); 
             
-            // Render Tasks
             const taskDiv = document.getElementById('task-list-display');
             taskDiv.innerHTML = '';
             if(s.tasks) {
@@ -422,20 +462,29 @@
             }
         }
 
-        // --- TARGETED DATA ---
+        // --- TARGETED DATA (Fixed Flickering) ---
         function updateTargetDropdowns() {
             const chatSel = document.getElementById('chat-target-select');
             const vidSel = document.getElementById('video-target-select');
             
-            // Keep base options for chat, clear video
+            // Save Current Selections to Stop Flickering/Jumping
+            let currentChat = chatSel.value;
+            let currentVid = vidSel.value;
+            
             chatSel.innerHTML = `<option value="Global">Broadcast Global</option><option value="Group_Security">Group: Security</option><option value="Group_Cleaning">Group: Cleaning</option><option value="Group_Maintenance">Group: Maintenance</option>`;
             vidSel.innerHTML = `<option value="">-- Select Guard to Call --</option>`;
             
             Object.keys(activeSessions).forEach(sid => {
                 const s = activeSessions[sid];
-                chatSel.innerHTML += `<option value="User_${sid}">User: ${s.name}</option>`;
-                vidSel.innerHTML += `<option value="${sid}">Call: ${s.name}</option>`;
+                if(s) {
+                    chatSel.innerHTML += `<option value="User_${sid}">User: ${s.name}</option>`;
+                    vidSel.innerHTML += `<option value="${sid}">Call: ${s.name}</option>`;
+                }
             });
+
+            // Re-apply saved selections
+            if([...chatSel.options].some(o => o.value === currentChat)) chatSel.value = currentChat;
+            if([...vidSel.options].some(o => o.value === currentVid)) vidSel.value = currentVid;
         }
 
         function scheduleTask() {
@@ -449,16 +498,32 @@
             alert('Task Scheduled successfully to user profile.');
         }
 
+        // --- CHAT PUSH LOGIC (Fixed to actually reach the Guard's App) ---
         function sendManagerChat() {
             const target = document.getElementById('chat-target-select').value;
             const msg = document.getElementById('manager-chat-input').value;
             if(!msg) return;
             
+            // UI Update
             const chatBox = document.getElementById('manager-chat-box');
-            chatBox.innerHTML += `<div style="background:#111; padding:8px; border-radius:4px;"><strong style="color:var(--cyber-blue)">Manager (${target}):</strong> ${msg}</div>`;
+            chatBox.innerHTML += `<div style="background:#111; padding:8px; border-radius:4px;"><strong style="color:var(--cyber-blue)">Manager (${target.replace('User_', '')}):</strong> ${msg}</div>`;
             document.getElementById('manager-chat-input').value = '';
             
-            // In a real app, you would push this to a Firebase nodes like `chats/Global`, `chats/Group_Security`, or `chats/User_ID`
+            // ACTUAL FIREBASE PUSH
+            const payload = { sender: 'Manager', msg: msg, timestamp: Date.now() };
+
+            if(target === 'Global') {
+                db.ref('chats/Global').push(payload);
+            } else if (target.startsWith('Group_')) {
+                let grp = target.replace('Group_', '');
+                db.ref(`chats/Groups/${grp}`).push(payload);
+            } else if (target.startsWith('User_')) {
+                let uid = target.replace('User_', '');
+                // Pushes directly into the Guard's specific profile block
+                db.ref(`active_shifts/${uid}/messages`).push(payload);
+            }
+            
+            chatBox.scrollTop = chatBox.scrollHeight;
         }
 
         function triggerTest(cmd) {
@@ -471,7 +536,6 @@
             const targetSid = document.getElementById('video-target-select').value;
             if(!targetSid) return alert("Select a guard from the dropdown to initiate the video connection.");
             alert("Waiting for Guard answer... (WebRTC requires peer active)");
-            // Video negotiation logic uses targetSid instead of global currentSID
         }
 
         function switchView(viewId) {
@@ -487,8 +551,8 @@
         
         function startSimulatedShift() {
             const name = document.getElementById('sim-name').value || "Demo Guard";
-            // Uses a persistent ID format so same name = same memory block, avoiding duplicates
-            simSessionID = "guard_" + name.replace(/[^a-zA-Z0-9]/g, '');
+            // Persist ID to stop cloning
+            simSessionID = "guard_" + name.replace(/[^a-zA-Z0-9]/g, ''); 
             
             db.ref('active_shifts/' + simSessionID).update({ id: simSessionID, name: name, status: 'Connecting...' });
             
