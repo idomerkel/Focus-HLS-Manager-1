@@ -29,14 +29,17 @@
         .session-item.active { border-left: 4px solid var(--cyber-blue); color: #fff; background: #000; }
         .del-btn { background: var(--alert-red); color: white; border: none; border-radius: 4px; cursor: pointer; padding: 4px 8px; font-weight: bold; }
 
-        .main-content { flex: 1; padding: 15px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
-        .view-panel { display: none; height: 100%; flex-direction: column; overflow-y: auto; gap: 15px; padding-bottom: 20px; }
+        .main-content { flex: 1; padding: 15px; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
+        .view-panel { display: none; flex-direction: column; gap: 15px; padding-bottom: 30px; }
         .view-panel.active { display: flex; }
 
         .telemetry-row { height: 18vh; min-height: 120px; background: #000; border: 1px solid var(--cyber-blue); position: relative; border-radius: 8px; overflow: hidden; flex-shrink: 0;}
         .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; flex: 1; min-height: 0; }
         
-        .card { background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid #1a2235; overflow-y: auto; display: flex; flex-direction: column; }
+        /* Responsive Breakpoint for laptops/tablets */
+        @media (max-width: 900px) { .dashboard-grid { grid-template-columns: 1fr; } }
+        
+        .card { background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid #1a2235; overflow: visible; display: flex; flex-direction: column; }
         .card-title { margin-top: 0; font-size: 0.9em; color: var(--text-muted); border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 15px; flex-shrink:0;}
         
         .profile-name { margin: 0; color: var(--cyber-blue); font-size: 1.8em; }
@@ -62,11 +65,19 @@
         .legend-item { display: flex; align-items: center; background: #000; padding: 5px 10px; border-radius: 4px; border: 1px solid #333; }
         .legend-color { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
 
+        /* Global UI Elements */
         #node-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; }
         .modal-content { background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--cyber-blue); width: 350px; }
+        
+        #global-ring-alert { display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--alert-red); color: white; padding: 20px 40px; border-radius: 12px; z-index: 10000; font-size: 1.5em; font-weight: bold; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.8); animation: pulse 0.5s infinite alternate; }
     </style>
 </head>
 <body id="main-body">
+
+    <div id="global-ring-alert">
+        🚨 INCOMING VIDEO CALL FROM GUARD 🚨<br>
+        <button onclick="switchView('comms'); document.getElementById('global-ring-alert').style.display='none';" style="margin-top:15px; padding:10px 20px; font-weight:bold; background:#fff; color:#000; border:none; border-radius:6px; cursor:pointer;">GO TO COMMS TAB TO ANSWER</button>
+    </div>
 
     <div class="sidebar">
         <div class="sidebar-logo-container"><h1>FOCUS <span style="color:var(--cyber-blue)">HLS</span></h1></div>
@@ -96,13 +107,13 @@
                         </div>
                     </div>
                     
-                    <div class="card" style="flex:1;">
+                    <div class="card" style="flex:1; min-height: 300px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px;">
                             <h3 class="card-title" style="border:none; margin:0; padding:0;">GUARD TO NODE DISTANCES</h3>
                             <button class="action-btn" style="width: auto; padding: 5px 15px; font-size: 0.8em; background: #00e676;" onclick="openNodeModal()">ASSIGN NODE</button>
                         </div>
                         <p style="font-size:0.8em; color:#888; margin-top:0;">Distances physically measured and streamed by the Guard's device.</p>
-                        <div style="flex: 1; min-height:100px; background: #000; border-radius: 6px; position:relative; padding: 5px;">
+                        <div style="flex: 1; min-height:150px; background: #000; border-radius: 6px; position:relative; padding: 5px;">
                             <canvas id="locChart"></canvas>
                         </div>
                         <div class="legend-container" id="chart-legend"></div>
@@ -110,7 +121,7 @@
                 </div>
 
                 <div style="display:flex; flex-direction: column; gap: 15px;">
-                    <div class="card" style="flex:1;">
+                    <div class="card" style="flex:1; min-height: 250px;">
                         <h3 class="card-title">TELEMETRY NOTIFICATIONS</h3>
                         <div class="alert-settings-grid" id="alert-settings-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.8em; color: #ccc;"></div>
                     </div>
@@ -151,7 +162,7 @@
                         <option value="Group_Cleaning">Group: Cleaning</option>
                         <option value="Group_Maintenance">Group: Maintenance</option>
                     </select>
-                    <div id="manager-chat-box" style="flex:1; background:#000; border:1px solid #333; padding:10px; overflow-y:auto; margin-bottom:15px; display:flex; flex-direction:column; gap:5px;"></div>
+                    <div id="manager-chat-box" style="flex:1; background:#000; border:1px solid #333; padding:10px; overflow-y:auto; margin-bottom:15px; display:flex; flex-direction:column; gap:5px; min-height: 200px;"></div>
                     <div style="display:flex; gap:10px;">
                         <input type="text" id="manager-chat-input" placeholder="Type message..." style="margin:0;">
                         <button class="action-btn" style="width:auto;" onclick="sendManagerChat()">SEND</button>
@@ -160,12 +171,13 @@
                 <div class="card">
                     <h3 class="card-title">LIVE VIDEO FEED</h3>
                     <select id="video-target-select"><option value="">-- Select Guard to Call --</option></select>
-                    <div style="flex:1; background:#000; border:1px solid #444; position:relative; min-height:200px; margin-bottom:15px;">
+                    <div style="flex:1; background:#000; border:1px solid #444; position:relative; min-height:250px; margin-bottom:15px;">
                         <video id="remoteVideo" autoplay playsinline style="width:100%; height:100%; object-fit:contain;"></video>
                         <video id="localVideo" autoplay playsinline muted style="width:80px; height:100px; position:absolute; bottom:10px; right:10px; border:2px solid var(--cyber-blue);"></video>
                     </div>
                     <div style="display:flex; gap:10px;">
                         <button style="background:var(--task-green);" class="action-btn" onclick="startManagerVideoCall()">CALL GUARD</button>
+                        <button style="background:var(--cyber-blue);" class="action-btn" onclick="answerVideoCall()">ANSWER CALL</button>
                         <button style="background:var(--alert-red);" class="action-btn" onclick="hangUp()">END CALL</button>
                     </div>
                 </div>
@@ -238,11 +250,12 @@
 
         let currentSID = null; let activeSessions = {}; const availableGroups = ["Unassigned", "Security", "Cleaning", "Maintenance"];
         let nameCache = {}; let guardStateHistory = {}; let globalRegisteredNodes = []; 
+        let lastSessionKeys = ""; // For flicker prevention
 
         // --- CHARTS ---
         const ctxTel = document.getElementById('telChart').getContext('2d');
         let gData = { ax: new Array(100).fill(0), ay: new Array(100).fill(0), az: new Array(100).fill(9.8) };
-        let telChart = new Chart(ctxTel, { type: 'line', data: { labels: new Array(100).fill(''), datasets: [ { label: 'X Axis', data: gData.ax, borderColor: '#ff0055', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }, { label: 'Y Axis', data: gData.ay, borderColor: '#00ff00', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }, { label: 'Z Axis', data: gData.az, borderColor: '#00b4d8', borderWidth: 1.5, pointRadius: 0, tension: 0.2 } ]}, options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { min: -25, max: 25, display: true, grid: { color: '#222' } }, x: { display: false } } } });
+        let telChart = new Chart(ctxTel, { type: 'line', data: { labels: new Array(100).fill(''), datasets: [ { label: 'X', data: gData.ax, borderColor: '#ff0055', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }, { label: 'Y', data: gData.ay, borderColor: '#00ff00', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }, { label: 'Z', data: gData.az, borderColor: '#00b4d8', borderWidth: 1.5, pointRadius: 0, tension: 0.2 } ]}, options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { min: -25, max: 25, display: true, grid: { color: '#222' } }, x: { display: false } } } });
 
         const ctxLoc = document.getElementById('locChart').getContext('2d');
         const nodeColors = ['#00e676', '#00b4d8', '#f77f00', '#d90429', '#9d4edd', '#e9c46a'];
@@ -281,7 +294,7 @@
                 let existingDataset = locChart.data.datasets.find(d => d.label === nodeName);
                 let dataArray = existingDataset ? existingDataset.data : new Array(30).fill(15);
                 
-                // Pull distance specific to this node streamed by the Guard
+                // Pull distance specifically streamed by the Guard
                 let newDist = (guardData.ble_distances && guardData.ble_distances[nodeName] !== undefined) ? guardData.ble_distances[nodeName] : 15;
                 dataArray.push(newDist); if(dataArray.length > 30) dataArray.shift();
                 
@@ -308,7 +321,7 @@
             } catch (error) { alert("Setup Failed: " + error.message); }
         }
 
-        // --- TELEMETRY NOTIFICATIONS ---
+        // --- TELEMETRY NOTIFICATIONS (Default SOS Only) ---
         const telemetryStates = ["SOS / Emergency", "Man Down / Immobility", "Loud Noise / Alarm", "Sleeping / Inactive", "Sitting / Guarding", "Standing", "Walking / Patrol", "Running / Sprinting", "Crash Impact", "Fighting / Struggle", "Medical Assist Req"];
         let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts')) || ["SOS / Emergency"];
         const alertContainer = document.getElementById('alert-settings-grid');
@@ -323,14 +336,17 @@
             let mean = magnitudes.reduce((a,b)=>a+b,0) / magnitudes.length; let variance = magnitudes.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / magnitudes.length;
             let crossings = 0; for(let i = 1; i < magnitudes.length; i++) { if((magnitudes[i-1]<mean && magnitudes[i]>=mean) || (magnitudes[i-1]>=mean && magnitudes[i]<mean)) crossings++; }
 
-            if (maxG > 20) return "Crash Impact"; if (maxG > 12 && variance > 5) return "Man Down / Immobility"; if (variance > 8 && crossings > 8) return "Fighting / Struggle";
-            if (peakToPeak > 6.0 && crossings >= 3) return "Running / Sprinting"; if (peakToPeak > 1.5 && peakToPeak <= 6.0 && crossings >= 1) return "Walking / Patrol";
+            if (maxG > 20) return "Crash Impact";
+            if (maxG > 12 && variance > 5) return "Man Down / Immobility";
+            if (variance > 8 && crossings > 8) return "Fighting / Struggle";
+            if (peakToPeak > 6.0 && crossings >= 3) return "Running / Sprinting";
+            if (peakToPeak > 1.5 && peakToPeak <= 6.0 && crossings >= 1) return "Walking / Patrol";
             if (peakToPeak < 0.5) return variance < 0.05 ? "Sleeping / Inactive" : "Sitting / Guarding"; return "Standing";
         }
 
         let processedBatches = {};
 
-        // --- CORE DATABASE SYNC ---
+        // --- CORE DATABASE SYNC & STATUS RECOGNITION ---
         db.ref('active_shifts').on('value', (snapshot) => {
             let data = snapshot.val() || {}; let seenNames = {};
             for(let sid in data) {
@@ -349,25 +365,35 @@
             activeSessions = data;
             Object.keys(activeSessions).forEach(sid => {
                 let s = activeSessions[sid]; if (s.role === "manager") return;
+                
+                // Audio Status Overrides EVERYTHING immediately
+                let isLoudNoise = (s.audio_db && s.audio_db > 85);
+                let finalStatus = s.status;
+
                 if (s.telemetry_batch && s.telemetry_batch.data && s.telemetry_batch.id !== processedBatches[sid]) {
-                    processedBatches[sid] = s.telemetry_batch.id; let rawStatus = researchRecognition(s.telemetry_batch.data);
+                    processedBatches[sid] = s.telemetry_batch.id; 
+                    let rawStatus = researchRecognition(s.telemetry_batch.data);
+                    
                     if(!guardStateHistory[sid]) guardStateHistory[sid] = { recent: [], lastCrash: 0 };
                     if(rawStatus === "Crash Impact") guardStateHistory[sid].lastCrash = Date.now();
                     guardStateHistory[sid].recent.push(rawStatus); if(guardStateHistory[sid].recent.length > 5) guardStateHistory[sid].recent.shift();
 
-                    let finalStatus = rawStatus; let timeSinceCrash = Date.now() - guardStateHistory[sid].lastCrash;
+                    let timeSinceCrash = Date.now() - guardStateHistory[sid].lastCrash;
                     let isInactive = (rawStatus === "Sleeping / Inactive" || rawStatus === "Sitting / Guarding" || rawStatus === "Standing");
 
-                    if (s.audio_db && s.audio_db > 85) finalStatus = "Loud Noise / Alarm";
-                    else if (timeSinceCrash < 60000 && isInactive) finalStatus = "Man Down / Immobility";
+                    if (timeSinceCrash < 60000 && isInactive) finalStatus = "Man Down / Immobility";
                     else if (["SOS / Emergency", "Crash Impact", "Fighting / Struggle"].includes(rawStatus)) finalStatus = rawStatus;
                     else {
                         let counts = {}; guardStateHistory[sid].recent.forEach(st => counts[st] = (counts[st]||0) + 1);
                         let dominant = Object.keys(counts).reduce((a,b) => counts[a] > counts[b] ? a : b);
                         if (counts[dominant] >= 4) finalStatus = dominant; else finalStatus = s.status || "Standing";
                     }
-                    if (finalStatus !== s.status && !s.isManual) { db.ref(`active_shifts/${sid}/status`).set(finalStatus); s.status = finalStatus; }
                 }
+
+                // If Audio is high, force the status regardless of accelerometer
+                if (isLoudNoise) finalStatus = "Loud Noise / Alarm";
+
+                if (finalStatus !== s.status && !s.isManual) { db.ref(`active_shifts/${sid}/status`).set(finalStatus); s.status = finalStatus; }
             });
 
             renderSidebar(); updateTargetDropdowns();
@@ -381,7 +407,12 @@
             } else if (currentSID) { currentSID = null; document.getElementById('focus-name').innerText = "NO TARGET"; document.getElementById('focus-id').innerText = "---"; }
         });
 
-        // --- UI RENDERERS ---
+        // --- GLOBAL VIDEO CALL LISTENER ---
+        db.ref(`active_shifts/${managerId}/webrtc/offer`).on('value', snap => {
+            const offer = snap.val();
+            if(offer && !peerConnection) document.getElementById('global-ring-alert').style.display = 'block';
+        });
+
         function allowDrop(ev) { ev.preventDefault(); ev.currentTarget.classList.add('drag-over'); } function leaveDrop(ev) { ev.currentTarget.classList.remove('drag-over'); }
         function drag(ev, sid) { ev.dataTransfer.setData("text", sid); } function drop(ev, groupName) { ev.preventDefault(); ev.currentTarget.classList.remove('drag-over'); let sid = ev.dataTransfer.getData("text"); if(sid) db.ref(`active_shifts/${sid}/group`).set(groupName); }
         function deleteUser(sid, event) { event.stopPropagation(); if(confirm("Permanently delete user?")) db.ref('active_shifts/' + sid).remove(); }
@@ -408,18 +439,29 @@
             document.getElementById('focus-name').innerText = s.name; document.getElementById('focus-id').innerText = sid; document.getElementById('focus-group').innerText = s.group || 'Unassigned'; document.getElementById('task-target-name').innerText = s.name;
             renderSidebar(); 
             const taskDiv = document.getElementById('task-list-display'); taskDiv.innerHTML = '';
-            if(s.tasks) Object.values(s.tasks).forEach(t => { taskDiv.innerHTML += `<div class="task-item"><strong>${t.time}</strong> - ${t.instruction}</div>`; }); else taskDiv.innerHTML = '<div style="color:#555;">No tasks scheduled.</div>';
+            if(s.tasks) Object.values(s.tasks).forEach(t => { taskDiv.innerHTML += `<div class="task-item"><strong>${t.time}</strong> - ${t.instruction}</div>`; });
+            else taskDiv.innerHTML = '<div style="color:#555;">No tasks scheduled.</div>';
             locChart.data.datasets = []; locChart.update();
         }
 
+        // --- FLICKER FIX FOR DROPDOWN ---
         function updateTargetDropdowns() {
             const chatSel = document.getElementById('chat-target-select'); const vidSel = document.getElementById('video-target-select');
-            let expectedOptions = Object.keys(activeSessions).length + 4; if (chatSel.options.length === expectedOptions) return; // Prevent Flicker
+            
+            // Build string of current user IDs to delta-check against last update
+            let currentKeys = Object.keys(activeSessions).filter(sid => activeSessions[sid].role !== "manager").sort().join(',');
+            if (currentKeys === lastSessionKeys && chatSel.options.length > 4) return; // No change, do not rebuild DOM!
+            lastSessionKeys = currentKeys;
+
             let currentChat = chatSel.value; let currentVid = vidSel.value; 
+            
             chatSel.innerHTML = `<option value="Global">Broadcast Global</option><option value="Group_Security">Group: Security</option><option value="Group_Cleaning">Group: Cleaning</option><option value="Group_Maintenance">Group: Maintenance</option>`;
             vidSel.innerHTML = `<option value="">-- Select Guard to Call --</option>`;
             Object.keys(activeSessions).forEach(sid => { const s = activeSessions[sid]; if(s && s.role !== "manager") { chatSel.innerHTML += `<option value="User_${sid}">User: ${s.name}</option>`; vidSel.innerHTML += `<option value="${sid}">Call: ${s.name}</option>`; } });
-            if([...chatSel.options].some(o => o.value === currentChat)) chatSel.value = currentChat; if([...vidSel.options].some(o => o.value === currentVid)) vidSel.value = currentVid;
+            
+            // Re-select previously selected options
+            if([...chatSel.options].some(o => o.value === currentChat)) chatSel.value = currentChat;
+            if([...vidSel.options].some(o => o.value === currentVid)) vidSel.value = currentVid;
         }
 
         // --- TASKS ---
@@ -433,7 +475,7 @@
             document.getElementById('task-inst').value = ''; alert('Task Scheduled and pushed to Guard.');
         }
 
-        // --- COMMS & WEBRTC (MANAGER INITIATES) ---
+        // --- COMMS & WEBRTC ---
         function sendManagerChat() {
             const target = document.getElementById('chat-target-select').value; const msg = document.getElementById('manager-chat-input').value; if(!msg) return;
             const chatBox = document.getElementById('manager-chat-box'); chatBox.innerHTML += `<div style="background:#111; padding:8px; border-radius:4px;"><strong style="color:var(--cyber-blue)">${myManagerName} (${target.replace('User_', '')}):</strong> ${msg}</div>`;
@@ -477,16 +519,33 @@
             alert("Ringing Guard...");
         }
 
+        async function answerVideoCall() {
+            document.getElementById('global-ring-alert').style.display = 'none';
+            const offerSnap = await db.ref(`active_shifts/${managerId}/webrtc/offer`).once('value');
+            const offer = offerSnap.val();
+            if(!offer) return alert("No active incoming call.");
+            
+            await initPeerConnection(managerId, 'manager');
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer(); await peerConnection.setLocalDescription(answer);
+            db.ref(`active_shifts/${managerId}/webrtc/answer`).set({ type: answer.type, sdp: answer.sdp });
+            
+            db.ref(`active_shifts/${managerId}/webrtc/candidates/guard`).on('child_added', snapshot => {
+                if(peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val()));
+            });
+        }
+
         function hangUp() {
             if(peerConnection) peerConnection.close(); if(localStream) localStream.getTracks().forEach(track => track.stop());
             peerConnection = null; if(currentSID) db.ref(`active_shifts/${currentSID}/webrtc`).remove();
+            db.ref(`active_shifts/${managerId}/webrtc`).remove();
             document.getElementById('remoteVideo').srcObject = null; document.getElementById('localVideo').srcObject = null;
         }
 
         function triggerTest(cmd) { if(currentSID) db.ref(`active_shifts/${currentSID}`).update({ status: 'Standing', isManual: null }); }
         function switchView(viewId) { document.querySelectorAll('.view-panel').forEach(v => v.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active')); document.getElementById(viewId).classList.add('active'); event.target.classList.add('active'); }
 
-        // --- SIMULATOR (Pulls dynamically assigned nodes for accurate distance charts) ---
+        // --- SIMULATOR ---
         let simSessionID = null, simInterval = null, currentMockState = 'sit'; let simDistances = {};
         function setMockState(s) { currentMockState = s; if(s === 'noise' && simSessionID) db.ref('active_shifts/' + simSessionID).update({ audio_db: 100 }); }
         
