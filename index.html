@@ -62,7 +62,6 @@
         .legend-item { display: flex; align-items: center; background: #000; padding: 5px 10px; border-radius: 4px; border: 1px solid #333; }
         .legend-color { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
 
-        /* Modal Overlay for Assigning Nodes */
         #node-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; }
         .modal-content { background: var(--panel-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--cyber-blue); width: 350px; }
     </style>
@@ -81,7 +80,6 @@
     </div>
 
     <div class="main-content">
-        
         <div id="dashboard" class="view-panel active">
             <div class="telemetry-row">
                 <canvas id="telChart"></canvas>
@@ -109,7 +107,7 @@
                             <h3 class="card-title" style="border:none; margin:0; padding:0;">GUARD BLE DISTANCES</h3>
                             <button class="action-btn" style="width: auto; padding: 5px 15px; font-size: 0.8em; background: #00e676;" onclick="openNodeModal()">ASSIGN NODE</button>
                         </div>
-                        <div id="ble-status" style="color: var(--cyber-blue); font-size: 0.9em; margin-bottom: 10px;">Status: Disconnected</div>
+                        <div id="ble-status" style="color: var(--cyber-blue); font-size: 0.9em; margin-bottom: 10px;">Manager BT Status: Ready</div>
                         <div style="flex: 1; min-height:100px; background: #000; border-radius: 6px; position:relative; padding: 5px;">
                             <canvas id="locChart"></canvas>
                         </div>
@@ -202,12 +200,10 @@
             <div class="card" style="max-width: 500px; margin: 0 auto; width: 100%;">
                 <h3 class="card-title" style="color:var(--focus-orange);">GUARD APP SIMULATOR</h3>
                 <p style="font-size:0.9em; color:#aaa;">Simulates a physical Android device connecting to the system.</p>
-                
                 <div id="sim-setup">
                     <input type="text" id="sim-name" placeholder="Guard Name" value="Demo Guard">
                     <button class="action-btn" style="background:var(--focus-orange); color:#fff;" onclick="startSimulatedShift()">Connect Device</button>
                 </div>
-                
                 <div id="sim-controls" style="display:none;">
                     <div style="color:#00e676; font-weight:bold; margin-bottom: 15px;">● Connected as: <span id="sim-active-name"></span></div>
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
@@ -236,10 +232,26 @@
     </div>
 
     <script>
+        // --- MANAGER LOGIN & PRESENCE ---
+        let myManagerName = localStorage.getItem('focus_mgr_name');
+        if(!myManagerName) {
+            myManagerName = prompt("Welcome Commander. Enter your Name:") || "HQ";
+            localStorage.setItem('focus_mgr_name', myManagerName);
+        }
+        const managerId = "mgr_" + myManagerName.replace(/[^a-zA-Z0-9]/g, '');
+
         // --- FIREBASE INIT ---
         const firebaseConfig = { apiKey: "AIzaSyAB2OJTPCyJaZ0BpE-FAEKdPW143VE3YDo", authDomain: "focushls-live.firebaseapp.com", projectId: "focushls-live", databaseURL: "https://focushls-live-default-rtdb.firebaseio.com" };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+
+        // Keep Manager Alive in the User List
+        function keepManagerAlive() {
+            db.ref('active_shifts/' + managerId).update({ id: managerId, name: myManagerName + " (HQ)", group: "Security", status: "Command Desk", role: "manager", timestamp: Date.now() });
+        }
+        keepManagerAlive();
+        setInterval(keepManagerAlive, 10000);
+        window.addEventListener("beforeunload", () => db.ref('active_shifts/' + managerId).remove());
 
         let currentSID = null;
         let activeSessions = {};
@@ -247,7 +259,7 @@
         
         let nameCache = {};
         let guardStateHistory = {}; 
-        let globalRegisteredNodes = []; // Stores node names fetched from Firebase
+        let globalRegisteredNodes = []; 
 
         // --- CHARTS ---
         const ctxTel = document.getElementById('telChart').getContext('2d');
@@ -274,7 +286,6 @@
             globalRegisteredNodes = [];
             const posList = document.getElementById('pos-list');
             const data = snapshot.val();
-            
             if(data) {
                 posList.innerHTML = '';
                 Object.keys(data).forEach(nodeName => {
@@ -291,12 +302,8 @@
             if(!currentSID) return alert("Select a Target Guard from the sidebar first.");
             const selectEl = document.getElementById('modal-node-select');
             selectEl.innerHTML = '';
-            
-            if(globalRegisteredNodes.length === 0) {
-                selectEl.innerHTML = '<option value="">No nodes available (Setup one first)</option>';
-            } else {
-                globalRegisteredNodes.forEach(n => selectEl.innerHTML += `<option value="${n}">${n}</option>`);
-            }
+            if(globalRegisteredNodes.length === 0) selectEl.innerHTML = '<option value="">No nodes available (Setup one first)</option>';
+            else globalRegisteredNodes.forEach(n => selectEl.innerHTML += `<option value="${n}">${n}</option>`);
             document.getElementById('node-modal').style.display = 'flex';
         }
 
@@ -329,88 +336,57 @@
 
         function calculateDistance(rssi) {
             if (rssi === 0) return 0;
-            const txPower = -65; 
-            const environmentalFactor = 2.5; 
-            let ratio = (txPower - rssi) / (10 * environmentalFactor);
-            return Math.pow(10, ratio); 
+            let ratio = (-65 - rssi) / (10 * 2.5); return Math.pow(10, ratio); 
         }
 
         async function startBLETracking() {
             try {
-                // acceptAllDevices bypasses strict Android UUID filters which hide devices
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: [0x180F, TACTICAL_SERVICE_UUID]
-                });
-
+                const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0x180F, TACTICAL_SERVICE_UUID] });
                 document.getElementById("ble-status").innerText = "Connecting...";
-                
                 await device.watchAdvertisements();
                 let nodeName = device.name || "Focus Node [Unknown]";
                 
-                document.getElementById("ble-status").innerText = "Tracking: " + nodeName;
+                document.getElementById("ble-status").innerText = "Manager BT Tracking: " + nodeName;
                 document.getElementById("ble-status").style.color = "#00e676";
 
                 device.addEventListener('advertisementreceived', (event) => {
                     if (event.device.name && event.device.name !== nodeName) {
-                        nodeName = event.device.name;
-                        document.getElementById("ble-status").innerText = "Tracking: " + nodeName;
+                        nodeName = event.device.name; document.getElementById("ble-status").innerText = "Manager BT Tracking: " + nodeName;
                     }
-                    let rawDistance = calculateDistance(event.rssi);
-                    locChart.data.datasets = [{ label: nodeName, data: [rawDistance, rawDistance, rawDistance], borderColor: '#00e676', borderWidth: 2 }];
-                    locChart.update();
+                    // Optional: Manager tracking its own raw distance independent of Guard
                 });
-
-            } catch (error) {
-                console.error(error);
-                alert("Tracking Error. Ensure you click Pair in the popup.");
-                document.getElementById("ble-status").innerText = "Status: Disconnected";
-            }
+            } catch (error) { document.getElementById("ble-status").innerText = "Status: Disconnected"; }
         }
 
-        // FIX: Handled the Disconnect exception gracefully and pushed to global registry
         async function setupNewNode() {
             const newName = document.getElementById("setup-pos-name").value;
             if(!newName) return;
             try {
-                const device = await navigator.bluetooth.requestDevice({ 
-                    acceptAllDevices: true,
-                    optionalServices: [0x180F, TACTICAL_SERVICE_UUID] 
-                });
+                const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0x180F, TACTICAL_SERVICE_UUID] });
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(TACTICAL_SERVICE_UUID);
                 const characteristic = await service.getCharacteristic(SETUP_CHAR_UUID);
                 
-                try {
-                    await characteristic.writeValue(new TextEncoder().encode(newName));
-                } catch (writeErr) {
-                    // ESP32 reboots immediately upon receiving GATT signal. This causes a disconnect error. We handle it as a SUCCESS.
-                    console.log("Write completed. ESP32 rebooted.");
-                }
+                try { await characteristic.writeValue(new TextEncoder().encode(newName)); } catch (writeErr) { console.log("Write completed. ESP32 rebooted."); }
                 
-                alert(`Success! Node flashed as "${newName}". It is rebooting now.`);
+                alert(`Success! Node flashed as "${newName}".`);
                 if (server.connected) server.disconnect();
                 
-                // Add to Global Registry in Firebase
                 db.ref(`registered_nodes/${newName}`).set({ name: newName, timestamp: Date.now() });
                 document.getElementById("setup-pos-name").value = "";
-                
-            } catch (error) { 
-                console.error(error);
-                alert("Setup Failed: " + error.message); 
-            }
+            } catch (error) { alert("Setup Failed: " + error.message); }
         }
 
+        // --- DEFAULT ALERTS CHANGED TO SOS ONLY ---
         const telemetryStates = ["SOS / Emergency", "Man Down / Immobility", "Loud Noise / Alarm", "Sleeping / Inactive", "Sitting / Guarding", "Standing", "Walking / Patrol", "Running / Sprinting", "Crash Impact", "Fighting / Struggle", "Medical Assist Req"];
-        let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts')) || ["SOS / Emergency", "Sleeping / Inactive", "Man Down / Immobility", "Loud Noise / Alarm", "Crash Impact"];
+        let alertSubscriptions = JSON.parse(localStorage.getItem('focus_alerts')) || ["SOS / Emergency"];
         const alertContainer = document.getElementById('alert-settings-grid');
         telemetryStates.forEach(state => {
             const checked = alertSubscriptions.includes(state) ? 'checked' : '';
             alertContainer.innerHTML += `<label><input type="checkbox" value="${state}" ${checked} onchange="updateAlerts(this)"> ${state}</label>`;
         });
         function updateAlerts(cb) {
-            if(cb.checked) alertSubscriptions.push(cb.value);
-            else alertSubscriptions = alertSubscriptions.filter(s => s !== cb.value);
+            if(cb.checked) alertSubscriptions.push(cb.value); else alertSubscriptions = alertSubscriptions.filter(s => s !== cb.value);
             localStorage.setItem('focus_alerts', JSON.stringify(alertSubscriptions));
         }
 
@@ -443,7 +419,7 @@
                 else if (nameCache[sid]) { data[sid].name = nameCache[sid]; db.ref(`active_shifts/${sid}/name`).set(nameCache[sid]); }
                 
                 let sName = data[sid].name;
-                if(sName) {
+                if(sName && data[sid].role !== "manager") {
                     if(!seenNames[sName]) seenNames[sName] = sid; 
                     else {
                         let existingSid = seenNames[sName];
@@ -457,6 +433,8 @@
             
             Object.keys(activeSessions).forEach(sid => {
                 let s = activeSessions[sid];
+                if (s.role === "manager") return; // Skip math engine for Managers
+
                 if (s.telemetry_batch && s.telemetry_batch.data && s.telemetry_batch.id !== processedBatches[sid]) {
                     processedBatches[sid] = s.telemetry_batch.id;
                     let rawStatus = researchRecognition(s.telemetry_batch.data);
@@ -472,24 +450,16 @@
                     let timeSinceCrash = Date.now() - guardStateHistory[sid].lastCrash;
                     let isInactive = (rawStatus === "Sleeping / Inactive" || rawStatus === "Sitting / Guarding" || rawStatus === "Standing");
 
-                    if (isLoudNoise) {
-                        finalStatus = "Loud Noise / Alarm";
-                    } else if (timeSinceCrash < 60000 && isInactive) {
-                        finalStatus = "Man Down / Immobility";
-                    } else if (["SOS / Emergency", "Crash Impact", "Fighting / Struggle"].includes(rawStatus)) {
-                        finalStatus = rawStatus;
-                    } else {
-                        let counts = {};
-                        guardStateHistory[sid].recent.forEach(st => counts[st] = (counts[st]||0) + 1);
+                    if (isLoudNoise) finalStatus = "Loud Noise / Alarm";
+                    else if (timeSinceCrash < 60000 && isInactive) finalStatus = "Man Down / Immobility";
+                    else if (["SOS / Emergency", "Crash Impact", "Fighting / Struggle"].includes(rawStatus)) finalStatus = rawStatus;
+                    else {
+                        let counts = {}; guardStateHistory[sid].recent.forEach(st => counts[st] = (counts[st]||0) + 1);
                         let dominant = Object.keys(counts).reduce((a,b) => counts[a] > counts[b] ? a : b);
-                        if (counts[dominant] >= 4) { finalStatus = dominant; } 
-                        else { finalStatus = s.status || "Standing"; }
+                        if (counts[dominant] >= 4) finalStatus = dominant; else finalStatus = s.status || "Standing";
                     }
 
-                    if (finalStatus !== s.status && !s.isManual) { 
-                        db.ref(`active_shifts/${sid}/status`).set(finalStatus); 
-                        s.status = finalStatus; 
-                    }
+                    if (finalStatus !== s.status && !s.isManual) { db.ref(`active_shifts/${sid}/status`).set(finalStatus); s.status = finalStatus; }
                 }
             });
 
@@ -532,7 +502,7 @@
                     const s = activeSessions[sid];
                     if ((s.group || "Unassigned") === grp) {
                         const isAlert = alertSubscriptions.includes(s.status);
-                        let color = isAlert ? "var(--alert-red)" : "var(--cyber-blue)";
+                        let color = isAlert ? "var(--alert-red)" : (s.role === "manager" ? "#f77f00" : "var(--cyber-blue)");
                         grpDiv.innerHTML += `
                             <div class="session-item ${currentSID === sid ? 'active' : ''}" onclick="selectSession('${sid}')" draggable="true" ondragstart="drag(event, '${sid}')">
                                 <div><strong style="color:#fff;">${s.name || 'Unknown'}</strong><br><span style="color:${color}; font-size:0.85em;">${s.status || 'Standby'}</span></div>
@@ -563,7 +533,6 @@
         function updateTargetDropdowns() {
             const chatSel = document.getElementById('chat-target-select'); const vidSel = document.getElementById('video-target-select');
             
-            // FLICKER FIX: Only rebuild DOM if total active users has changed
             let expectedOptions = Object.keys(activeSessions).length + 4;
             if (chatSel.options.length === expectedOptions) return;
 
@@ -573,40 +542,33 @@
             vidSel.innerHTML = `<option value="">-- Select Guard to Call --</option>`;
             Object.keys(activeSessions).forEach(sid => {
                 const s = activeSessions[sid];
-                if(s) { chatSel.innerHTML += `<option value="User_${sid}">User: ${s.name}</option>`; vidSel.innerHTML += `<option value="${sid}">Call: ${s.name}</option>`; }
+                if(s && s.role !== "manager") { chatSel.innerHTML += `<option value="User_${sid}">User: ${s.name}</option>`; vidSel.innerHTML += `<option value="${sid}">Call: ${s.name}</option>`; }
             });
             if([...chatSel.options].some(o => o.value === currentChat)) chatSel.value = currentChat;
             if([...vidSel.options].some(o => o.value === currentVid)) vidSel.value = currentVid;
         }
 
-        // --- TASK FIX: Properly structures the Firebase push for Android List Adapters ---
         function scheduleTask() {
             if(!currentSID) return alert("Select a Guard from the sidebar first.");
             const time = document.getElementById('task-time').value; const inst = document.getElementById('task-inst').value;
             if(!time || !inst) return alert("Fill out time and instructions.");
             
             const taskRef = db.ref(`active_shifts/${currentSID}/tasks`).push();
-            taskRef.set({
-                id: taskRef.key,
-                time: time, 
-                instruction: inst,
-                status: "pending",
-                timestamp: Date.now()
-            });
-            
+            taskRef.set({ id: taskRef.key, time: time, instruction: inst, status: "pending", timestamp: Date.now() });
             db.ref(`active_shifts/${currentSID}/new_task_trigger`).set(Date.now());
             
-            document.getElementById('task-inst').value = ''; 
-            alert('Task Scheduled and pushed to Guard.');
+            document.getElementById('task-inst').value = ''; alert('Task Scheduled and pushed to Guard.');
         }
 
+        // --- UPDATED CHAT TO USE MANAGER'S REAL NAME ---
         function sendManagerChat() {
             const target = document.getElementById('chat-target-select').value; const msg = document.getElementById('manager-chat-input').value;
             if(!msg) return;
             const chatBox = document.getElementById('manager-chat-box');
-            chatBox.innerHTML += `<div style="background:#111; padding:8px; border-radius:4px;"><strong style="color:var(--cyber-blue)">Manager (${target.replace('User_', '')}):</strong> ${msg}</div>`;
+            chatBox.innerHTML += `<div style="background:#111; padding:8px; border-radius:4px;"><strong style="color:var(--cyber-blue)">${myManagerName} (${target.replace('User_', '')}):</strong> ${msg}</div>`;
             document.getElementById('manager-chat-input').value = '';
-            const payload = { sender: 'Manager', msg: msg, timestamp: Date.now() };
+            
+            const payload = { sender: myManagerName, msg: msg, timestamp: Date.now() };
             if(target === 'Global') db.ref('chats/Global').push(payload);
             else if (target.startsWith('Group_')) db.ref(`chats/Groups/${target.replace('Group_', '')}`).push(payload);
             else if (target.startsWith('User_')) db.ref(`active_shifts/${target.replace('User_', '')}/messages`).push(payload);
@@ -614,7 +576,6 @@
         }
 
         function triggerTest(cmd) { if(currentSID) db.ref(`active_shifts/${currentSID}`).update({ status: 'Standing', isManual: null }); }
-        
         function answerVideoCall() { alert("Waiting for Guard answer... (WebRTC requires peer active)"); }
 
         function switchView(viewId) {
@@ -626,10 +587,7 @@
         // --- SIMULATOR ---
         let simSessionID = null, simInterval = null, currentMockState = 'sit'; 
         let simDistances = {};
-        function setMockState(s) { 
-            currentMockState = s; 
-            if(s === 'noise' && simSessionID) db.ref('active_shifts/' + simSessionID).update({ audio_db: 100 });
-        }
+        function setMockState(s) { currentMockState = s; if(s === 'noise' && simSessionID) db.ref('active_shifts/' + simSessionID).update({ audio_db: 100 }); }
         
         function startSimulatedShift() {
             const name = document.getElementById('sim-name').value || "Demo Guard";
@@ -642,18 +600,10 @@
                 let t = Date.now(); let ax=0, ay=0, az=0; let simBuffer = []; let mockAudio = 40; 
                 for(let i=0; i<10; i++) {
                     let offset = t + (i*100); 
-                    if(currentMockState === 'walk') { 
-                        ax = Math.sin(offset/200)*2.5; ay = Math.cos(offset/200)*2.5; az = 9.8 + Math.sin(offset/150)*1.5; mockAudio = 55; 
-                    }
-                    else if (currentMockState === 'run') { 
-                        ax = Math.sin(offset/100)*7; ay = Math.cos(offset/100)*7; az = 9.8 + Math.sin(offset/80)*5; mockAudio = 75; 
-                    }
-                    else if (currentMockState === 'crash') { 
-                        ax = 25; ay = 25; az = 25; currentMockState = 'sit'; 
-                    } 
-                    else { 
-                        ax = (Math.random()-0.5)*0.1; ay = (Math.random()-0.5)*0.1; az = 9.8 + (Math.random()-0.5)*0.1; 
-                    }
+                    if(currentMockState === 'walk') { ax = Math.sin(offset/200)*2.5; ay = Math.cos(offset/200)*2.5; az = 9.8 + Math.sin(offset/150)*1.5; mockAudio = 55; }
+                    else if (currentMockState === 'run') { ax = Math.sin(offset/100)*7; ay = Math.cos(offset/100)*7; az = 9.8 + Math.sin(offset/80)*5; mockAudio = 75; }
+                    else if (currentMockState === 'crash') { ax = 25; ay = 25; az = 25; currentMockState = 'sit'; } 
+                    else { ax = (Math.random()-0.5)*0.1; ay = (Math.random()-0.5)*0.1; az = 9.8 + (Math.random()-0.5)*0.1; }
                     simBuffer.push({ax, ay, az});
                 }
                 
@@ -662,16 +612,13 @@
                     Object.keys(s.assigned_nodes).forEach(n => {
                         if(!simDistances[n]) simDistances[n] = 10;
                         if(currentMockState !== 'sit') simDistances[n] += (Math.random() - 0.5) * 2;
-                        simDistances[n] = Math.max(0, Math.min(15, simDistances[n])); 
-                        distPayload[n] = simDistances[n];
+                        simDistances[n] = Math.max(0, Math.min(15, simDistances[n])); distPayload[n] = simDistances[n];
                     });
                 }
                 
                 let finalAudio = (s && s.audio_db === 100 && currentMockState !== 'noise') ? 100 : mockAudio;
                 db.ref('active_shifts/' + simSessionID).update({ telemetry_batch: { data: simBuffer, id: Date.now() }, ble_distances: distPayload, audio_db: finalAudio, timestamp: Date.now() });
-                
                 if(s && s.audio_db === 100) setTimeout(() => db.ref('active_shifts/' + simSessionID).update({ audio_db: 40 }), 3000); 
-
             }, 1000);
         }
         function stopSimulatedShift() { clearInterval(simInterval); document.getElementById('sim-setup').style.display = 'block'; document.getElementById('sim-controls').style.display = 'none'; }
